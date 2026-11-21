@@ -1,0 +1,29 @@
+﻿namespace SafeSeated.Application.Dtos;
+
+public class UploadDocumentRequestDto
+{
+    public string DocumentType { get; set; } = string.Empty;
+    public byte[] FileContent { get; set; } = Array.Empty<byte>();
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+}
+
+public class DocumentDto
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public string DocumentType { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string? RejectionReason { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+}
+
+public class UserDocumentsResponseDto
+{
+    public List<DocumentDto> Documents { get; set; } = new();
+    public bool AllApproved => Documents.All(d => d.Status == "Approved");
+    public int ApprovedCount => Documents.Count(d => d.Status == "Approved");
+    public int PendingCount => Documents.Count(d => d.Status == "Pending");
+    public int RejectedCount => Documents.Count(d => d.Status == "Rejected");
+}

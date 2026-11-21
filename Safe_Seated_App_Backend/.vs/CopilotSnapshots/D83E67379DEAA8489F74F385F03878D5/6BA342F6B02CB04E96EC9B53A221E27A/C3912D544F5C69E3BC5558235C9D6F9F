@@ -1,0 +1,148 @@
+﻿using Microsoft.EntityFrameworkCore;
+using SafeSeated.Domain.Entities;
+using SafeSeated.Domain.Enums;
+using SafeSeated.Infrastructure.Data;
+
+namespace SafeSeated.Application.Services
+{
+    public class NotificationService : INotificationService
+    {
+        private readonly SafeSeatedDbContext _dbContext;
+        private readonly ILogger<NotificationService> _logger;
+
+        public NotificationService(SafeSeatedDbContext dbContext, ILogger<NotificationService> logger)
+        {
+            _dbContext = dbContext;
+            _logger = logger;
+        }
+
+        public async Task NotifyAsync(
+            Guid userId,
+            string title,
+            string body,
+            NotificationType type,
+            Guid? relatedEntityId = null,
+            CancellationToken cancellationToken = default)
+        {
+            var notification = new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Title = title,
+                Body = body,
+                Type = type,
+                RelatedEntityId = relatedEntityId,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _dbContext.Notifications.Add(notification);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Notification created for user {UserId}: {Title}", userId, title);
+        }
+
+        public async Task NotifyMultipleAsync(
+            List<Guid> userIds,
+            string title,
+            string body,
+            NotificationType type,
+            Guid? relatedEntityId = null,
+            CancellationToken cancellationToken = default)
+        {
+            var notifications = userIds.Select(userId => new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Title = title,
+                Body = body,
+                Type = type,
+                RelatedEntityId = relatedEntityId,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            }).ToList();
+
+            _dbContext.Notifications.AddRange(notifications);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Notifications created for {Count} users: {Title}", userIds.Count, title);
+        }
+
+        public async Task<object> GetUserNotificationsAsync(
+            Guid userId,
+            int page = 1,
+            int pageSize = 10,
+            CancellationToken cancellationToken = default)
+        {
+            var totalCount = await _dbContext.Notifications
+                .Where(n => n.UserId == userId)
+                .CountAsync(cancellationToken);
+
+            var notifications = await _dbContext.Notifications
+                .Where(n => n.UserId == userId)
+                .OrderByDescending(n => n.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(n => new
+                {
+                    n.Id,
+                    n.Title,
+                    n.Body,
+                    n.Type,
+                    n.IsRead,
+                    n.RelatedEntityId,
+                    n.CreatedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            return new
+            {
+                data = notifications,
+                pagination = new { page, pageSize, totalCount, totalPages = (totalCount + pageSize - 1) / pageSize }
+            };
+        }
+
+        public async Task<bool> MarkAsReadAsync(
+            Guid notificationId,
+            CancellationToken cancellationToken = default)
+        {
+            var notification = await _dbContext.Notifications
+                .FirstOrDefaultAsync(n => n.Id == notificationId, cancellationToken);
+
+            if (notification == null)
+                return false;
+
+            notification.IsRead = true;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return true;
+        }
+
+        public async Task<bool> MarkAllAsReadAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            var notifications = await _dbContext.Notifications
+                .Where(n => n.UserId == userId && !n.IsRead)
+                .ToListAsync(cancellationToken);
+
+            if (notifications.Count == 0)
+                return false;
+
+            foreach (var notification in notifications)
+                notification.IsRead = true;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+
+        public async Task<int> GetUnreadCountAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            return await _dbContext.Notifications
+                .Where(n => n.UserId == userId && !n.IsRead)
+                .CountAsync(cancellationToken);
+        }
+    }
+}

@@ -1,0 +1,105 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{5FB43B28-7830-CD5E-8AC6-A72E5B774BCC}|SafeSeated.Api\\SafeSeated.Api.csproj|c:\\users\\hp\\source\\repos\\safe_seated_app_backend\\safeseated.api\\readme.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{5FB43B28-7830-CD5E-8AC6-A72E5B774BCC}|SafeSeated.Api\\SafeSeated.Api.csproj|solutionrelative:safeseated.api\\readme.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{F4D59EB2-106F-FE7D-9884-59A74DDC9DC2}|SafeSeated.Application\\SafeSeated.Application.csproj|c:\\users\\hp\\source\\repos\\safe_seated_app_backend\\safeseated.application\\dtos\\authdtos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{F4D59EB2-106F-FE7D-9884-59A74DDC9DC2}|SafeSeated.Application\\SafeSeated.Application.csproj|solutionrelative:safeseated.application\\dtos\\authdtos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{5FB43B28-7830-CD5E-8AC6-A72E5B774BCC}|SafeSeated.Api\\SafeSeated.Api.csproj|c:\\users\\hp\\source\\repos\\safe_seated_app_backend\\safeseated.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5FB43B28-7830-CD5E-8AC6-A72E5B774BCC}|SafeSeated.Api\\SafeSeated.Api.csproj|solutionrelative:safeseated.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{F4D59EB2-106F-FE7D-9884-59A74DDC9DC2}|SafeSeated.Application\\SafeSeated.Application.csproj|c:\\users\\hp\\source\\repos\\safe_seated_app_backend\\safeseated.application\\dtos\\documentdtos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{F4D59EB2-106F-FE7D-9884-59A74DDC9DC2}|SafeSeated.Application\\SafeSeated.Application.csproj|solutionrelative:safeseated.application\\dtos\\documentdtos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A471A46C-04B7-D0BE-4B7E-5AD5166C6649}|SafeSeated.Infrastructure\\SafeSeated.Infrastructure.csproj|c:\\users\\hp\\source\\repos\\safe_seated_app_backend\\safeseated.infrastructure\\services\\documentservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A471A46C-04B7-D0BE-4B7E-5AD5166C6649}|SafeSeated.Infrastructure\\SafeSeated.Infrastructure.csproj|solutionrelative:safeseated.infrastructure\\services\\documentservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 4,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "DocumentService.cs",
+              "DocumentMoniker": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Infrastructure\\Services\\DocumentService.cs",
+              "RelativeDocumentMoniker": "SafeSeated.Infrastructure\\Services\\DocumentService.cs",
+              "ToolTip": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Infrastructure\\Services\\DocumentService.cs",
+              "RelativeToolTip": "SafeSeated.Infrastructure\\Services\\DocumentService.cs",
+              "ViewState": "AgIAAEAAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-10T16:51:01.072Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "DocumentDtos.cs",
+              "DocumentMoniker": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Application\\Dtos\\DocumentDtos.cs",
+              "RelativeDocumentMoniker": "SafeSeated.Application\\Dtos\\DocumentDtos.cs",
+              "ToolTip": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Application\\Dtos\\DocumentDtos.cs",
+              "RelativeToolTip": "SafeSeated.Application\\Dtos\\DocumentDtos.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAxwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-10T16:51:00.862Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "AuthDtos.cs",
+              "DocumentMoniker": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Application\\Dtos\\AuthDtos.cs",
+              "RelativeDocumentMoniker": "SafeSeated.Application\\Dtos\\AuthDtos.cs",
+              "ToolTip": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Application\\Dtos\\AuthDtos.cs",
+              "RelativeToolTip": "SafeSeated.Application\\Dtos\\AuthDtos.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-10T16:49:36.428Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Api\\Program.cs",
+              "RelativeDocumentMoniker": "SafeSeated.Api\\Program.cs",
+              "ToolTip": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Api\\Program.cs",
+              "RelativeToolTip": "SafeSeated.Api\\Program.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-10T16:49:34.71Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "README.md",
+              "DocumentMoniker": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Api\\README.md",
+              "RelativeDocumentMoniker": "SafeSeated.Api\\README.md",
+              "ToolTip": "C:\\Users\\HP\\source\\repos\\Safe_Seated_App_Backend\\SafeSeated.Api\\README.md",
+              "RelativeToolTip": "SafeSeated.Api\\README.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAIkFAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-11-10T16:49:03.272Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

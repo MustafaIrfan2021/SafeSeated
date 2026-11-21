@@ -1,0 +1,325 @@
+﻿using BCrypt.Net;
+using Microsoft.EntityFrameworkCore;
+using SafeSeated.Domain.Entities;
+using SafeSeated.Domain.Enums;
+
+namespace SafeSeated.Infrastructure.Data;
+
+/// <summary>
+/// Initializes the database with seed data and runs migrations
+/// </summary>
+public static class DbInitializer
+{
+    public static async Task InitializeAsync(SafeSeatedDbContext context)
+    {
+        // Apply pending migrations
+        await context.Database.MigrateAsync();
+
+        // Seed data if database is empty
+        if (!await context.Users.AnyAsync())
+        {
+            await SeedUsersAsync(context);
+            await SeedRidesAndBookingsAsync(context);
+            await SeedNotificationsAsync(context);
+        }
+    }
+
+    private static async Task SeedUsersAsync(SafeSeatedDbContext context)
+    {
+        var adminId = Guid.NewGuid();
+        var passengerAyeshaId = Guid.NewGuid();
+        var driverSanaId = Guid.NewGuid();
+        var driverHinaId = Guid.NewGuid();
+
+        // Admin user
+        var admin = new User
+        {
+            Id = adminId,
+            Role = UserRole.Admin,
+            FullName = "Admin SafeSeated",
+            Email = "admin@safeseated.pk",
+            Phone = "0300-0000000",
+            Cnic = "00000-0000000-0",
+            PasswordHash = BCrypt.EnhancedHashPassword("Admin@123"),
+            Status = UserStatus.Approved,
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = null
+        };
+
+        // Passenger: Ayesha Khan
+        var passengerAyesha = new User
+        {
+            Id = passengerAyeshaId,
+            Role = UserRole.Passenger,
+            FullName = "Ayesha Khan",
+            Email = "ayesha@smiu.edu.pk",
+            Phone = "0300-1111111",
+            Cnic = "12345-1234567-1",
+            PasswordHash = BCrypt.EnhancedHashPassword("Passenger@123"),
+            Status = UserStatus.Approved,
+            CreatedAt = DateTime.UtcNow.AddDays(-30),
+            LastLoginAt = DateTime.UtcNow.AddHours(-2)
+        };
+
+        var passengerProfile = new PassengerProfile
+        {
+            UserId = passengerAyeshaId,
+            University = "SMIU",
+            StudentId = "2024001",
+            ProgramAndSemester = "BS Computer Science, Semester 4",
+            EmergencyContactName = "Fatima Khan",
+            EmergencyContactPhone = "0333-2222222",
+            CreatedAt = DateTime.UtcNow.AddDays(-30)
+        };
+
+        // Driver: Sana Malik
+        var driverSanaId2 = Guid.NewGuid();
+        var driverSana = new User
+        {
+            Id = driverSanaId,
+            Role = UserRole.Driver,
+            FullName = "Sana Malik",
+            Email = "sana@safeseated.pk",
+            Phone = "0321-3333333",
+            Cnic = "54321-7654321-2",
+            PasswordHash = BCrypt.EnhancedHashPassword("Driver@123"),
+            Status = UserStatus.Approved,
+            CreatedAt = DateTime.UtcNow.AddDays(-60),
+            LastLoginAt = DateTime.UtcNow.AddHours(-1)
+        };
+
+        var driverSanaProfile = new DriverProfile
+        {
+            UserId = driverSanaId,
+            City = "Karachi",
+            LicenseNumber = "DL-2024-001",
+            VehicleMakeModel = "Toyota Corolla",
+            VehicleColor = "Silver",
+            PlateNumber = "KHI-1234",
+            VehicleModelYear = 2022,
+            SeatsForPassengers = 3,
+            VehicleRegistrationNumber = "REG-2024-001",
+            IsOnline = true,
+            AverageRating = 4.8,
+            CreatedAt = DateTime.UtcNow.AddDays(-60)
+        };
+
+        // Driver: Hina Raza
+        var driverHina = new User
+        {
+            Id = driverHinaId,
+            Role = UserRole.Driver,
+            FullName = "Hina Raza",
+            Email = "hina@safeseated.pk",
+            Phone = "0334-4444444",
+            Cnic = "98765-9876543-3",
+            PasswordHash = BCrypt.HashPassword("Driver@123"),
+            Status = UserStatus.Approved,
+            CreatedAt = DateTime.UtcNow.AddDays(-45),
+            LastLoginAt = DateTime.UtcNow.AddHours(-3)
+        };
+
+        var driverHinaProfile = new DriverProfile
+        {
+            UserId = driverHinaId,
+            City = "Karachi",
+            LicenseNumber = "DL-2024-002",
+            VehicleMakeModel = "Honda City",
+            VehicleColor = "White",
+            PlateNumber = "KHI-5678",
+            VehicleModelYear = 2021,
+            SeatsForPassengers = 3,
+            VehicleRegistrationNumber = "REG-2024-002",
+            IsOnline = true,
+            AverageRating = 4.5,
+            CreatedAt = DateTime.UtcNow.AddDays(-45)
+        };
+
+        context.Users.AddRange(admin, passengerAyesha, driverSana, driverHina);
+        context.PassengerProfiles.Add(passengerProfile);
+        context.DriverProfiles.AddRange(driverSanaProfile, driverHinaProfile);
+
+        // Seed sample documents (all approved)
+        var documents = new List<UserDocument>
+        {
+            new()
+            {
+                UserId = passengerAyeshaId,
+                DocumentType = DocumentType.CnicFront,
+                Status = DocumentStatus.Approved,
+                StoredFilePath = "/uploads/ayesha-cnic-front.jpg",
+                ContentType = "image/jpeg",
+                ReviewedByAdminId = adminId,
+                ReviewedAt = DateTime.UtcNow.AddDays(-25),
+                CreatedAt = DateTime.UtcNow.AddDays(-30)
+            },
+            new()
+            {
+                UserId = passengerAyeshaId,
+                DocumentType = DocumentType.UniversityId,
+                Status = DocumentStatus.Approved,
+                StoredFilePath = "/uploads/ayesha-uni-id.jpg",
+                ContentType = "image/jpeg",
+                ReviewedByAdminId = adminId,
+                ReviewedAt = DateTime.UtcNow.AddDays(-25),
+                CreatedAt = DateTime.UtcNow.AddDays(-30)
+            },
+            new()
+            {
+                UserId = driverSanaId,
+                DocumentType = DocumentType.CnicFront,
+                Status = DocumentStatus.Approved,
+                StoredFilePath = "/uploads/sana-cnic-front.jpg",
+                ContentType = "image/jpeg",
+                ReviewedByAdminId = adminId,
+                ReviewedAt = DateTime.UtcNow.AddDays(-55),
+                CreatedAt = DateTime.UtcNow.AddDays(-60)
+            },
+            new()
+            {
+                UserId = driverSanaId,
+                DocumentType = DocumentType.DrivingLicense,
+                Status = DocumentStatus.Approved,
+                StoredFilePath = "/uploads/sana-license.jpg",
+                ContentType = "image/jpeg",
+                ReviewedByAdminId = adminId,
+                ReviewedAt = DateTime.UtcNow.AddDays(-55),
+                CreatedAt = DateTime.UtcNow.AddDays(-60)
+            }
+        };
+
+        context.UserDocuments.AddRange(documents);
+
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedRidesAndBookingsAsync(SafeSeatedDbContext context)
+    {
+        var driverSana = await context.Users.FirstAsync(u => u.Email == "sana@safeseated.pk");
+        var passengerAyesha = await context.Users.FirstAsync(u => u.Email == "ayesha@smiu.edu.pk");
+        var admin = await context.Users.FirstAsync(u => u.Role == UserRole.Admin);
+
+        var now = DateTime.UtcNow;
+
+        // Create sample rides
+        var ride1 = new Ride
+        {
+            DriverId = driverSana.Id,
+            PickupArea = "Gulshan-e-Iqbal",
+            Destination = "SMIU, Shahrah-e-Faisal",
+            DepartureTime = now.AddHours(2),
+            PricePerSeat = 150,
+            SeatsOffered = 4,
+            Status = RideStatus.Active,
+            CreatedAt = now.AddHours(-1)
+        };
+
+        var ride2 = new Ride
+        {
+            DriverId = driverSana.Id,
+            PickupArea = "Clifton",
+            Destination = "SMIU, Shahrah-e-Faisal",
+            DepartureTime = now.AddHours(4),
+            PricePerSeat = 200,
+            SeatsOffered = 3,
+            Status = RideStatus.Active,
+            CreatedAt = now.AddHours(-1)
+        };
+
+        context.Rides.AddRange(ride1, ride2);
+        await context.SaveChangesAsync();
+
+        // Create sample bookings
+        var booking1 = new Booking
+        {
+            RideId = ride1.Id,
+            PassengerId = passengerAyesha.Id,
+            SeatsRequested = 1,
+            PickupTime = ride1.DepartureTime.AddMinutes(-5),
+            TravelDate = ride1.DepartureTime.Date,
+            Status = BookingStatus.Accepted,
+            CreatedAt = now.AddHours(-1),
+            UpdatedAt = now.AddMinutes(-30)
+        };
+
+        context.Bookings.Add(booking1);
+        await context.SaveChangesAsync();
+
+        // Create sample chat message
+        var chatMessage = new ChatMessage
+        {
+            BookingId = booking1.Id,
+            SenderId = passengerAyesha.Id,
+            Text = "Hi Sana, can you please pick me up 5 minutes early?",
+            SentAt = now.AddMinutes(-20),
+            IsRead = true,
+            CreatedAt = now.AddMinutes(-20)
+        };
+
+        context.ChatMessages.Add(chatMessage);
+
+        // Create sample fee payment (approved)
+        var feePayment = new ServiceFeePayment
+        {
+            DriverId = driverSana.Id,
+            Amount = 450,
+            Method = PaymentMethod.Easypaisa,
+            TransactionId = "EAS-2024-001",
+            ReceiptFilePath = "/uploads/receipts/easypaisa-receipt-001.pdf",
+            Status = FeePaymentStatus.Approved,
+            ReviewedByAdminId = admin.Id,
+            ReviewedAt = now.AddDays(-3),
+            CreatedAt = now.AddDays(-5)
+        };
+
+        context.ServiceFeePayments.Add(feePayment);
+
+        // Create sample notifications
+        var notifications = new List<Notification>
+        {
+            new()
+            {
+                UserId = passengerAyesha.Id,
+                Title = "Ride Request Accepted",
+                Body = "Your ride request from Gulshan-e-Iqbal to SMIU has been accepted by Sana Malik",
+                Type = NotificationType.BookingAccepted,
+                RelatedEntityId = booking1.Id,
+                IsRead = true,
+                CreatedAt = now.AddMinutes(-30)
+            },
+            new()
+            {
+                UserId = driverSana.Id,
+                Title = "Fee Payment Approved",
+                Body = "Your service fee payment has been approved. PKR 450 has been credited.",
+                Type = NotificationType.FeePaymentApproved,
+                RelatedEntityId = feePayment.Id,
+                IsRead = true,
+                CreatedAt = now.AddDays(-3)
+            }
+        };
+
+        context.Notifications.AddRange(notifications);
+
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedNotificationsAsync(SafeSeatedDbContext context)
+    {
+        var passengerAyesha = await context.Users.FirstAsync(u => u.Email == "ayesha@smiu.edu.pk");
+        var now = DateTime.UtcNow;
+
+        var unreadNotification = new Notification
+        {
+            UserId = passengerAyesha.Id,
+            Title = "Upcoming Ride",
+            Body = "Your ride with Sana Malik is scheduled for today at 2:30 PM from Gulshan-e-Iqbal.",
+            Type = NotificationType.General,
+            IsRead = false,
+            CreatedAt = now.AddMinutes(-10)
+        };
+
+        context.Notifications.Add(unreadNotification);
+        await context.SaveChangesAsync();
+    }
+}

@@ -1,0 +1,361 @@
+﻿using Microsoft.EntityFrameworkCore;
+using SafeSeated.Application.Dtos.Bookings;
+using SafeSeated.Domain.Entities;
+using SafeSeated.Domain.Enums;
+using SafeSeated.Infrastructure.Data;
+
+namespace SafeSeated.Application.Services
+{
+    public class BookingService : IBookingService
+    {
+        private readonly SafeSeatedDbContext _dbContext;
+        private readonly INotificationService _notificationService;
+        private readonly ILogger<BookingService> _logger;
+
+        public BookingService(
+            SafeSeatedDbContext dbContext,
+            INotificationService notificationService,
+            ILogger<BookingService> logger)
+        {
+            _dbContext = dbContext;
+            _notificationService = notificationService;
+            _logger = logger;
+        }
+
+        public async Task<BookingDto> CreateBookingAsync(Guid passengerId, CreateBookingDto dto, CancellationToken cancellationToken = default)
+        {
+            // Verify passenger exists and is approved
+            var passenger = await _dbContext.Users
+                .FirstOrDefaultAsync(u => u.Id == passengerId && u.Role == UserRole.Passenger, cancellationToken);
+
+            if (passenger == null || passenger.Status != UserStatus.Approved)
+                throw new InvalidOperationException("Passenger must be approved to make bookings");
+
+            // Get ride with concurrency control
+            var ride = await _dbContext.Rides
+                .Include(r => r.Driver)
+                .Include(r => r.Bookings.Where(b => b.Status == BookingStatus.Accepted))
+                .FirstOrDefaultAsync(r => r.Id == dto.RideId, cancellationToken);
+
+            if (ride == null)
+                throw new KeyNotFoundException("Ride not found");
+
+            if (ride.Status != RideStatus.Active)
+                throw new InvalidOperationException("This ride is not available for booking");
+
+            if (ride.DepartureTime <= DateTime.UtcNow)
+                throw new InvalidOperationException("Cannot book a ride that has already departed");
+
+            // Check if passenger already has active booking on this ride
+            var existingBooking = await _dbContext.Bookings
+                .FirstOrDefaultAsync(b =>
+                    b.RideId == dto.RideId &&
+                    b.PassengerId == passengerId &&
+                    (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Accepted),
+                cancellationToken);
+
+            if (existingBooking != null)
+                throw new InvalidOperationException("You already have an active booking on this ride");
+
+            // Check seat availability (with race condition protection)
+            var seatsBooked = ride.Bookings.Sum(b => b.SeatsRequested);
+            var seatsAvailable = ride.SeatsOffered - seatsBooked;
+
+            if (dto.SeatsRequested > seatsAvailable)
+                throw new InvalidOperationException($"Only {seatsAvailable} seats available");
+
+            var booking = new Booking
+            {
+                Id = Guid.NewGuid(),
+                RideId = dto.RideId,
+                PassengerId = passengerId,
+                SeatsRequested = dto.SeatsRequested,
+                PickupTime = dto.PickupTime,
+                Status = BookingStatus.Pending,
+                TravelDate = ride.DepartureTime.Date,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _dbContext.Bookings.Add(booking);
+
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                // Notify driver
+                await _notificationService.NotifyAsync(
+                    ride.DriverId,
+                    "New Booking Request",
+                    $"{passenger.FullName} requested {dto.SeatsRequested} seat(s) on your {ride.PickupArea} → {ride.Destination} ride",
+                    NotificationType.BookingRequest,
+                    booking.Id,
+                    cancellationToken);
+
+                _logger.LogInformation("Booking created: {BookingId} by passenger {PassengerId}", booking.Id, passengerId);
+                return await MapToBookingDtoAsync(booking, cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "Concurrency conflict during booking creation for ride {RideId}", dto.RideId);
+                throw new InvalidOperationException("Seat availability changed. Please refresh and try again.");
+            }
+        }
+
+        public async Task<BookingDto> GetBookingByIdAsync(Guid bookingId, CancellationToken cancellationToken = default)
+        {
+            var booking = await _dbContext.Bookings
+                .FirstOrDefaultAsync(b => b.Id == bookingId, cancellationToken);
+
+            if (booking == null)
+                throw new KeyNotFoundException("Booking not found");
+
+            return await MapToBookingDtoAsync(booking, cancellationToken);
+        }
+
+        public async Task<List<BookingDto>> GetPassengerBookingsAsync(Guid passengerId, string status = null, CancellationToken cancellationToken = default)
+        {
+            var query = _dbContext.Bookings
+                .Where(b => b.PassengerId == passengerId);
+
+            if (!string.IsNullOrEmpty(status) && Enum.TryParse<BookingStatus>(status, out var bookingStatus))
+                query = query.Where(b => b.Status == bookingStatus);
+
+            var bookings = await query
+                .OrderByDescending(b => b.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            var dtos = new List<BookingDto>();
+            foreach (var booking in bookings)
+                dtos.Add(await MapToBookingDtoAsync(booking, cancellationToken));
+
+            return dtos;
+        }
+
+        public async Task<List<BookingDto>> GetDriverBookingsAsync(Guid driverId, string status = null, CancellationToken cancellationToken = default)
+        {
+            var query = _dbContext.Bookings
+                .Include(b => b.Ride)
+                .Where(b => b.Ride.DriverId == driverId);
+
+            if (!string.IsNullOrEmpty(status) && Enum.TryParse<BookingStatus>(status, out var bookingStatus))
+                query = query.Where(b => b.Status == bookingStatus);
+
+            var bookings = await query
+                .OrderByDescending(b => b.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            var dtos = new List<BookingDto>();
+            foreach (var booking in bookings)
+                dtos.Add(await MapToBookingDtoAsync(booking, cancellationToken));
+
+            return dtos;
+        }
+
+        public async Task<bool> CancelBookingAsync(Guid bookingId, Guid passengerId, CancellationToken cancellationToken = default)
+        {
+            var booking = await _dbContext.Bookings
+                .Include(b => b.Ride)
+                .FirstOrDefaultAsync(b => b.Id == bookingId && b.PassengerId == passengerId, cancellationToken);
+
+            if (booking == null)
+                return false;
+
+            if (booking.Status != BookingStatus.Pending)
+                throw new InvalidOperationException("Only pending bookings can be cancelled");
+
+            booking.Status = BookingStatus.Cancelled;
+            booking.UpdatedAt = DateTime.UtcNow;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Notify driver
+            await _notificationService.NotifyAsync(
+                booking.Ride.DriverId,
+                "Booking Cancelled",
+                $"Booking cancelled for {booking.Ride.PickupArea} → {booking.Ride.Destination}",
+                NotificationType.BookingRequest,
+                bookingId,
+                cancellationToken);
+
+            _logger.LogInformation("Booking cancelled: {BookingId}", bookingId);
+            return true;
+        }
+
+        public async Task<bool> AcceptBookingAsync(Guid bookingId, Guid driverId, CancellationToken cancellationToken = default)
+        {
+            var booking = await _dbContext.Bookings
+                .Include(b => b.Ride)
+                .Include(b => b.Passenger)
+                .FirstOrDefaultAsync(b => b.Id == bookingId && b.Ride.DriverId == driverId, cancellationToken);
+
+            if (booking == null)
+                return false;
+
+            if (booking.Status != BookingStatus.Pending)
+                throw new InvalidOperationException("Only pending bookings can be accepted");
+
+            // Verify seats are still available (race condition check)
+            var ride = await _dbContext.Rides
+                .Include(r => r.Bookings.Where(b => b.Status == BookingStatus.Accepted))
+                .FirstOrDefaultAsync(r => r.Id == booking.RideId, cancellationToken);
+
+            var seatsAvailable = ride!.SeatsOffered - ride.Bookings.Sum(b => b.SeatsRequested);
+            if (booking.SeatsRequested > seatsAvailable)
+                throw new InvalidOperationException("Insufficient seats available");
+
+            booking.Status = BookingStatus.Accepted;
+            booking.UpdatedAt = DateTime.UtcNow;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Notify passenger
+            await _notificationService.NotifyAsync(
+                booking.PassengerId,
+                "Booking Accepted",
+                $"Your booking for {ride.PickupArea} → {ride.Destination} has been accepted",
+                NotificationType.BookingAccepted,
+                bookingId,
+                cancellationToken);
+
+            _logger.LogInformation("Booking accepted: {BookingId}", bookingId);
+            return true;
+        }
+
+        public async Task<bool> RejectBookingAsync(Guid bookingId, Guid driverId, CancellationToken cancellationToken = default)
+        {
+            var booking = await _dbContext.Bookings
+                .Include(b => b.Ride)
+                .Include(b => b.Passenger)
+                .FirstOrDefaultAsync(b => b.Id == bookingId && b.Ride.DriverId == driverId, cancellationToken);
+
+            if (booking == null)
+                return false;
+
+            if (booking.Status != BookingStatus.Pending)
+                throw new InvalidOperationException("Only pending bookings can be rejected");
+
+            booking.Status = BookingStatus.Rejected;
+            booking.UpdatedAt = DateTime.UtcNow;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Notify passenger
+            await _notificationService.NotifyAsync(
+                booking.PassengerId,
+                "Booking Rejected",
+                $"Your booking has been rejected. Driver did not accept your request.",
+                NotificationType.BookingRejected,
+                bookingId,
+                cancellationToken);
+
+            _logger.LogInformation("Booking rejected: {BookingId}", bookingId);
+            return true;
+        }
+
+        public async Task<bool> CompleteBookingAsync(Guid bookingId, Guid driverId, CancellationToken cancellationToken = default)
+        {
+            var booking = await _dbContext.Bookings
+                .Include(b => b.Ride)
+                .Include(b => b.Passenger)
+                .FirstOrDefaultAsync(b => b.Id == bookingId && b.Ride.DriverId == driverId, cancellationToken);
+
+            if (booking == null)
+                return false;
+
+            if (booking.Status != BookingStatus.Accepted)
+                throw new InvalidOperationException("Only accepted bookings can be marked as completed");
+
+            booking.Status = BookingStatus.Completed;
+            booking.UpdatedAt = DateTime.UtcNow;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Notify passenger
+            await _notificationService.NotifyAsync(
+                booking.PassengerId,
+                "Trip Completed",
+                "Your trip has been completed. You can now rate your driver.",
+                NotificationType.BookingCompleted,
+                bookingId,
+                cancellationToken);
+
+            _logger.LogInformation("Booking completed: {BookingId}", bookingId);
+            return true;
+        }
+
+        public async Task<(bool Success, string Message)> RateBookingAsync(
+            Guid bookingId,
+            Guid passengerId,
+            RateBookingDto dto,
+            CancellationToken cancellationToken = default)
+        {
+            var booking = await _dbContext.Bookings
+                .Include(b => b.Ride)
+                .ThenInclude(r => r.Driver)
+                .FirstOrDefaultAsync(b => b.Id == bookingId && b.PassengerId == passengerId, cancellationToken);
+
+            if (booking == null)
+                throw new KeyNotFoundException("Booking not found");
+
+            if (booking.Status != BookingStatus.Completed)
+                return (false, "Only completed bookings can be rated");
+
+            if (booking.Rating.HasValue)
+                return (false, "You have already rated this booking");
+
+            booking.Rating = dto.Rating;
+            booking.Review = dto.Review;
+            booking.RatedAt = DateTime.UtcNow;
+
+            // Update driver rating
+            var driverRatings = await _dbContext.Bookings
+                .Where(b => b.Ride.DriverId == booking.Ride.DriverId && b.Rating.HasValue)
+                .Select(b => b.Rating.Value)
+                .ToListAsync(cancellationToken);
+
+            if (driverRatings.Count > 0)
+            {
+                var avgRating = driverRatings.Average();
+                booking.Ride.Driver.DriverProfile!.AverageRating = Math.Round(avgRating, 1);
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Rating submitted for booking {BookingId}: {Rating} stars", bookingId, dto.Rating);
+            return (true, "Rating submitted successfully");
+        }
+
+        private async Task<BookingDto> MapToBookingDtoAsync(Booking booking, CancellationToken cancellationToken)
+        {
+            var ride = await _dbContext.Rides
+                .Include(r => r.Driver)
+                .FirstOrDefaultAsync(r => r.Id == booking.RideId, cancellationToken);
+
+            var passenger = await _dbContext.Users
+                .FirstOrDefaultAsync(u => u.Id == booking.PassengerId, cancellationToken);
+
+            return new BookingDto
+            {
+                Id = booking.Id,
+                RideId = ride!.Id,
+                PassengerId = booking.PassengerId,
+                DriverId = ride.DriverId,
+                PassengerName = passenger?.FullName ?? "Unknown",
+                DriverName = ride.Driver.FullName,
+                PickupArea = ride.PickupArea,
+                Destination = ride.Destination,
+                SeatsRequested = booking.SeatsRequested,
+                PickupTime = booking.PickupTime,
+                DepartureTime = ride.DepartureTime,
+                Status = booking.Status.ToString(),
+                TravelDate = booking.TravelDate,
+                PricePerSeat = ride.PricePerSeat,
+                Rating = booking.Rating ?? 0,
+                Review = booking.Review,
+                CreatedAt = booking.CreatedAt,
+                UpdatedAt = booking.UpdatedAt
+            };
+        }
+    }
+}

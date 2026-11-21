@@ -1,0 +1,289 @@
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using SafeSeated.Application.Dtos;
+using SafeSeated.Domain.Entities;
+using SafeSeated.Domain.Enums;
+using SafeSeated.Infrastructure.Data;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace SafeSeated.Infrastructure.Services;
+
+/// <summary>
+/// Simple authentication service - handles registration, login, token refresh, password change
+/// </summary>
+public class AuthService
+{
+    private readonly SafeSeatedDbContext _db;
+    private readonly IConfiguration _config;
+    private readonly ILogger<AuthService> _logger;
+
+    public AuthService(SafeSeatedDbContext db, IConfiguration config, ILogger<AuthService> logger)
+    {
+        _db = db;
+        _config = config;
+        _logger = logger;
+    }
+
+    public async Task<(bool success, string message, Guid? userId)> RegisterAsync(RegisterDto dto)
+    {
+        try
+        {
+            // Validate role
+            if (dto.Role != "Passenger" && dto.Role != "Driver" && dto.Role != "Admin")
+                return (false, "Invalid role", null);
+
+            // Check if user exists
+            if (await _db.Users.AnyAsync(u => u.Email == dto.Email.ToLower() || u.Phone == dto.Phone))
+                return (false, "Email or phone already registered", null);
+
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                FullName = dto.FullName,
+                Email = dto.Email.ToLower(),
+                Phone = dto.Phone,
+                Cnic = dto.Cnic,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
+                Role = Enum.Parse<UserRole>(dto.Role),
+                Status = UserStatus.Pending, // Needs admin approval
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.Users.Add(user);
+
+            // If driver, create driver profile
+            if (dto.Role == "Driver")
+            {
+                var driverProfile = new DriverProfile
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    City = dto.City ?? string.Empty,
+                    LicenseNumber = dto.LicenseNumber ?? string.Empty,
+                    VehicleMakeModel = dto.VehicleMakeModel ?? string.Empty,
+                    VehicleColor = dto.VehicleColor ?? string.Empty,
+                    PlateNumber = dto.PlateNumber ?? string.Empty,
+                    VehicleModelYear = dto.VehicleModelYear,
+                    SeatsForPassengers = dto.SeatsForPassengers,
+                    VehicleRegistrationNumber = dto.VehicleRegistrationNumber ?? string.Empty,
+                    IsOnline = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.DriverProfiles.Add(driverProfile);
+            }
+            else
+            {
+                // Create passenger profile
+                var passengerProfile = new PassengerProfile
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    University = dto.University ?? "Not Specified",
+                    StudentId = dto.StudentId ?? "0",
+                    ProgramAndSemester = dto.ProgramAndSemester ?? "Not Specified",
+                    EmergencyContactName = dto.EmergencyContactName ?? "Not Provided",
+                    EmergencyContactPhone = dto.EmergencyContactPhone ?? "0000-0000000",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.PassengerProfiles.Add(passengerProfile);
+            }
+
+            await _db.SaveChangesAsync();
+            _logger.LogInformation($"User registered: {dto.Email} as {dto.Role}");
+            return (true, "Registration successful. Awaiting admin approval.", user.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Registration error");
+            return (false, "Registration failed", null);
+        }
+    }
+
+    public async Task<(bool success, TokenResponseDto? tokens, string message)> LoginAsync(LoginDto dto)
+    {
+        try
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email.ToLower());
+            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+                return (false, null, "Invalid credentials");
+
+            // Only approved users can login
+            if (user.Status != UserStatus.Approved)
+                return (false, null, $"Account is {user.Status}. Contact admin for status.");
+
+            var accessToken = GenerateAccessToken(user);
+            var refreshTokenHash = GenerateRefreshTokenHash(out var refreshTokenValue);
+
+            // Save refresh token
+            var refreshToken = new RefreshToken
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                TokenHash = refreshTokenHash,
+                ExpiresAt = DateTime.UtcNow.AddDays(7),
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.RefreshTokens.Add(refreshToken);
+
+            user.LastLoginAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation($"Login successful: {user.Email}");
+
+            return (true, new TokenResponseDto
+            {
+                AccessToken = accessToken,
+                RefreshToken = refreshTokenValue,
+                User = new UserInfoDto
+                {
+                    Id = user.Id,
+                    FullName = user.FullName,
+                    Email = user.Email,
+                    Phone = user.Phone,
+                    Role = user.Role.ToString(),
+                    Status = user.Status.ToString()
+                }
+            }, "Login successful");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Login error");
+            return (false, null, "Login failed");
+        }
+    }
+
+    public async Task<(bool success, TokenResponseDto? tokens, string message)> RefreshTokenAsync(string refreshToken)
+    {
+        try
+        {
+            var hash = HashToken(refreshToken);
+            var token = await _db.RefreshTokens
+                .Include(rt => rt.User)
+                .FirstOrDefaultAsync(rt => rt.TokenHash == hash && rt.RevokedAt == null);
+
+            if (token == null || token.IsExpired)
+                return (false, null, "Invalid or expired token");
+
+            var user = token.User;
+            if (user.Status != UserStatus.Approved)
+                return (false, null, "User not approved");
+
+            // Revoke old token
+            token.RevokedAt = DateTime.UtcNow;
+
+            // Create new tokens
+            var newAccessToken = GenerateAccessToken(user);
+            var newRefreshTokenHash = GenerateRefreshTokenHash(out var newRefreshTokenValue);
+
+            var newRefreshToken = new RefreshToken
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                TokenHash = newRefreshTokenHash,
+                ExpiresAt = DateTime.UtcNow.AddDays(7),
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.RefreshTokens.Add(newRefreshToken);
+            await _db.SaveChangesAsync();
+
+            return (true, new TokenResponseDto
+            {
+                AccessToken = newAccessToken,
+                RefreshToken = newRefreshTokenValue,
+                User = new UserInfoDto
+                {
+                    Id = user.Id,
+                    FullName = user.FullName,
+                    Email = user.Email,
+                    Phone = user.Phone,
+                    Role = user.Role.ToString(),
+                    Status = user.Status.ToString()
+                }
+            }, "Token refreshed");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Token refresh error");
+            return (false, null, "Token refresh failed");
+        }
+    }
+
+    public async Task<(bool success, string message)> ChangePasswordAsync(Guid userId, ChangePasswordDto dto)
+    {
+        try
+        {
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+                return (false, "User not found");
+
+            if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
+                return (false, "Current password is incorrect");
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+
+            // Revoke all refresh tokens (logout all devices)
+            var tokens = await _db.RefreshTokens
+                .Where(t => t.UserId == userId && t.RevokedAt == null)
+                .ToListAsync();
+            foreach (var t in tokens)
+                t.RevokedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+            _logger.LogInformation($"Password changed: {user.Email}");
+            return (true, "Password changed successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Password change error");
+            return (false, "Password change failed");
+        }
+    }
+
+    // Helper methods
+    private string GenerateAccessToken(User user)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
+            _config["Jwt:SecretKey"] ?? throw new InvalidOperationException("JWT key not configured")));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Name, user.FullName),
+            new Claim(ClaimTypes.Role, user.Role.ToString())
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: _config["Jwt:Issuer"],
+            audience: _config["Jwt:Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(15),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private string GenerateRefreshTokenHash(out string plainToken)
+    {
+        var randomNumber = new byte[32];
+        using (var rng = RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(randomNumber);
+            plainToken = Convert.ToBase64String(randomNumber);
+        }
+        return HashToken(plainToken);
+    }
+
+    private string HashToken(string token)
+    {
+        using (var sha256 = System.Security.Cryptography.SHA256.Create())
+        {
+            var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(token));
+            return Convert.ToBase64String(hashedBytes);
+        }
+    }
+}

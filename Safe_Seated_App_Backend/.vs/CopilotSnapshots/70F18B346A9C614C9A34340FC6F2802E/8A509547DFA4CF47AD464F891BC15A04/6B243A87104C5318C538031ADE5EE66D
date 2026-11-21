@@ -1,0 +1,78 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace SafeSeated.Application.Dtos.Auth;
+
+/// <summary>
+/// Request DTO for passenger registration
+/// </summary>
+public class RegisterPassengerRequestDto
+{
+    [Required(ErrorMessage = "Full name is required")]
+    [StringLength(100, MinimumLength = 3, ErrorMessage = "Full name must be between 3 and 100 characters")]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Email is required")]
+    [EmailAddress(ErrorMessage = "Invalid email format")]
+    public string Email { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Phone number is required")]
+    [RegularExpression(@"^03\d{2}-\d{7}$", ErrorMessage = "Phone must be in format 03XX-XXXXXXX")]
+    public string Phone { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "CNIC is required")]
+    [RegularExpression(@"^\d{5}-\d{7}-\d$", ErrorMessage = "CNIC must be in format XXXXX-XXXXXXX-X")]
+    public string Cnic { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Password is required")]
+    [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters")]
+    public string Password { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Password confirmation is required")]
+    [Compare("Password", ErrorMessage = "Passwords do not match")]
+    public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request DTO for driver registration
+/// </summary>
+public class RegisterDriverRequestDto
+{
+    [Required(ErrorMessage = "Full name is required")]
+    [StringLength(100, MinimumLength = 3, ErrorMessage = "Full name must be between 3 and 100 characters")]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Email is required")]
+    [EmailAddress(ErrorMessage = "Invalid email format")]
+    public string Email { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Phone number is required")]
+    [RegularExpression(@"^03\d{2}-\d{7}$", ErrorMessage = "Phone must be in format 03XX-XXXXXXX")]
+    public string Phone { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "CNIC is required")]
+    [RegularExpression(@"^\d{5}-\d{7}-\d$", ErrorMessage = "CNIC must be in format XXXXX-XXXXXXX-X")]
+    public string Cnic { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Password is required")]
+    [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters")]
+    public string Password { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Password confirmation is required")]
+    [Compare("Password", ErrorMessage = "Passwords do not match")]
+    public string ConfirmPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vehicle registration is required")]
+    [StringLength(20, ErrorMessage = "Vehicle registration max 20 characters")]
+    public string VehicleRegistration { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vehicle model is required")]
+    [StringLength(50, ErrorMessage = "Vehicle model max 50 characters")]
+    public string VehicleModel { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vehicle color is required")]
+    [StringLength(20, ErrorMessage = "Vehicle color max 20 characters")]
+    public string VehicleColor { get; set; } = string.Empty;
+
+    [Range(1, 8, ErrorMessage = "Seat capacity must be between 1 and 8")]
+    public int SeatCapacity { get; set; }
+}

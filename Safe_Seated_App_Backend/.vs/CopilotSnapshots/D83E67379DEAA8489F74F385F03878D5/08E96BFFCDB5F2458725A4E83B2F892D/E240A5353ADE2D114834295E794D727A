@@ -1,0 +1,40 @@
+﻿{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SafeSeatedDb;Trusted_Connection=true;MultipleActiveResultSets=true"
+  },
+  "Jwt": {
+    "SecretKey": "your-secret-key-change-this-in-production-minimum-32-characters-required",
+    "Issuer": "SafeSeated",
+    "Audience": "SafeSeatedClient",
+    "AccessTokenExpiryMinutes": 15,
+    "RefreshTokenExpiryDays": 7
+  },
+  "ServiceFee": {
+    "PercentageOfEarnings": 20.0
+  },
+  "FileStorage": {
+    "UploadPath": "C:\\SafeSeated\\Uploads",
+    "MaxFileSizeBytes": 5242880,
+    "AllowedExtensions": [ "jpg", "jpeg", "png", "pdf" ]
+  },
+  "Pagination": {
+    "DefaultPageSize": 10,
+    "MaxPageSize": 100
+  },
+  "RateLimiting": {
+    "AuthEndpointLimit": 5,
+    "AuthEndpointWindowSeconds": 900
+  },
+  "FormatSettings": {
+    "PakistaniPhoneRegex": "^03\\d{2}-\\d{7}$",
+    "PakistaniCnicRegex": "^\\d{5}-\\d{7}-\\d$"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.EntityFrameworkCore": "Information"
+    }
+  },
+  "AllowedHosts": "*"
+}

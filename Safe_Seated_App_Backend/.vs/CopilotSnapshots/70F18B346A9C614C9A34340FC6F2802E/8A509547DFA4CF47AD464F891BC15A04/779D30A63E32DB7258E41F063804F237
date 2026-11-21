@@ -1,0 +1,81 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace SafeSeated.Application.Dtos;
+
+// ============ AUTH DTOs ============
+
+public class RegisterDto
+{
+    [Required]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    public string Phone { get; set; } = string.Empty;
+
+    [Required]
+    public string Cnic { get; set; } = string.Empty;
+
+    [Required]
+    [MinLength(8)]
+    public string Password { get; set; } = string.Empty;
+
+    [Required]
+    public string Role { get; set; } = "Passenger"; // "Passenger" or "Driver"
+
+    // Driver-specific fields
+    public string? City { get; set; }
+    public string? LicenseNumber { get; set; }
+    public string? VehicleMakeModel { get; set; }
+    public string? VehicleColor { get; set; }
+    public string? PlateNumber { get; set; }
+    public int VehicleModelYear { get; set; }
+    public int SeatsForPassengers { get; set; }
+    public string? VehicleRegistrationNumber { get; set; }
+}
+
+public class LoginDto
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    public string Password { get; set; } = string.Empty;
+}
+
+public class TokenResponseDto
+{
+    public string AccessToken { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
+    public UserInfoDto User { get; set; } = new();
+}
+
+public class UserInfoDto
+{
+    public Guid Id { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+}
+
+public class RefreshTokenDto
+{
+    [Required]
+    public string RefreshToken { get; set; } = string.Empty;
+}
+
+public class ChangePasswordDto
+{
+    [Required]
+    public string CurrentPassword { get; set; } = string.Empty;
+
+    [Required]
+    [MinLength(8)]
+    public string NewPassword { get; set; } = string.Empty;
+}

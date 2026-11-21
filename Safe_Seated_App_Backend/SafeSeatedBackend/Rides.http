@@ -1,0 +1,100 @@
+@baseUrl = http://localhost:5157
+@token = replace-with-driver-jwt
+@passengerToken = replace-with-passenger-jwt
+@rideId = replace-with-created-ride-id
+@rideRequestId = replace-with-created-request-id
+
+### Search rides (public)
+GET {{baseUrl}}/api/rides?pickup=NUML&destination=DHA&date=2026-11-18&seats=1
+
+### Create a ride (verified driver)
+POST {{baseUrl}}/api/rides
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "pickup": "NUML University",
+  "destination": "DHA Phase 5",
+  "departureTime": "2026-11-18T09:00:00Z",
+  "farePerSeat": 250,
+  "totalSeats": 3,
+  "notes": "Meet at the main gate"
+}
+
+### Get a ride by ID
+GET {{baseUrl}}/api/rides/{{rideId}}
+Authorization: Bearer {{token}}
+
+### List the current driver's rides
+GET {{baseUrl}}/api/drivers/me/rides
+Authorization: Bearer {{token}}
+
+### Partially update a ride
+PATCH {{baseUrl}}/api/rides/{{rideId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "farePerSeat": 300
+}
+
+### Update driver availability
+PATCH {{baseUrl}}/api/drivers/me/availability
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "isOnline": true
+}
+
+### Cancel a ride (soft cancellation)
+DELETE {{baseUrl}}/api/rides/{{rideId}}
+Authorization: Bearer {{token}}
+
+### Create a passenger ride request
+POST {{baseUrl}}/api/ride-requests
+Authorization: Bearer {{passengerToken}}
+Content-Type: application/json
+
+{
+  "pickup": "NUML University",
+  "destination": "DHA Phase 5",
+  "requestedTime": "2026-11-19T09:00:00Z",
+  "seats": 2
+}
+
+### List my ride requests
+GET {{baseUrl}}/api/ride-requests/me
+Authorization: Bearer {{passengerToken}}
+
+### List open requests (verified online driver)
+GET {{baseUrl}}/api/ride-requests/open
+Authorization: Bearer {{token}}
+
+### Offer a ride for a request
+POST {{baseUrl}}/api/ride-requests/{{rideRequestId}}/offers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "totalSeats": 3,
+  "farePerSeat": 300
+}
+
+### Cancel my open ride request
+POST {{baseUrl}}/api/ride-requests/{{rideRequestId}}/cancel
+Authorization: Bearer {{passengerToken}}
+
+### Submit a complaint
+POST {{baseUrl}}/api/complaints
+Authorization: Bearer {{passengerToken}}
+Content-Type: application/json
+
+{
+  "rideId": "{{rideId}}",
+  "description": "The pickup location was different from the agreed location."
+}
+
+### List my complaints
+GET {{baseUrl}}/api/complaints/me
+Authorization: Bearer {{passengerToken}}

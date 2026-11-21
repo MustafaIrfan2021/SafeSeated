@@ -1,0 +1,54 @@
+﻿using SafeSeated.Application.Dtos.Auth;
+
+namespace SafeSeated.Application.Services;
+
+/// <summary>
+/// Authentication service interface
+/// </summary>
+public interface IAuthService
+{
+    /// <summary>
+    /// Registers a new passenger user
+    /// </summary>
+    Task<(bool success, string message, Guid? userId)> RegisterPassengerAsync(RegisterPassengerRequestDto request);
+
+    /// <summary>
+    /// Registers a new driver user
+    /// </summary>
+    Task<(bool success, string message, Guid? userId)> RegisterDriverAsync(RegisterDriverRequestDto request);
+
+    /// <summary>
+    /// Authenticates user and returns JWT tokens
+    /// </summary>
+    Task<(bool success, TokenResponseDto? tokens, string message)> LoginAsync(LoginRequestDto request);
+
+    /// <summary>
+    /// Refreshes JWT access token using refresh token
+    /// </summary>
+    Task<(bool success, TokenResponseDto? tokens, string message)> RefreshTokenAsync(RefreshTokenRequestDto request);
+
+    /// <summary>
+    /// Changes user password
+    /// </summary>
+    Task<(bool success, string message)> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request);
+
+    /// <summary>
+    /// Validates user credentials (for login)
+    /// </summary>
+    Task<(bool valid, string? message, Guid? userId)> ValidateCredentialsAsync(string email, string password);
+
+    /// <summary>
+    /// Gets registration status for a user
+    /// </summary>
+    Task<RegistrationStatusDto?> GetRegistrationStatusAsync(Guid userId);
+
+    /// <summary>
+    /// Revokes all refresh tokens for a user (logout all devices)
+    /// </summary>
+    Task<bool> LogoutAllDevicesAsync(Guid userId, string? reason = null);
+
+    /// <summary>
+    /// Revokes a specific refresh token
+    /// </summary>
+    Task<bool> RevokeRefreshTokenAsync(string tokenHash, string? reason = null);
+}

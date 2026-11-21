@@ -1,0 +1,178 @@
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using SafeSeated.Application.Dtos;
+using SafeSeated.Domain.Entities;
+using SafeSeated.Domain.Enums;
+using SafeSeated.Infrastructure.Data;
+
+namespace SafeSeated.Infrastructure.Services;
+
+/// <summary>
+/// Document upload and verification service
+/// Handles document storage and metadata management
+/// Note: File conversion from IFormFile happens in the API layer
+/// </summary>
+public class DocumentService
+{
+    private readonly SafeSeatedDbContext _db;
+    private readonly ILogger<DocumentService> _logger;
+    private readonly string _uploadPath;
+    private readonly long _maxFileSize = 10 * 1024 * 1024; // 10 MB
+
+    private readonly string[] _allowedExtensions = { ".jpg", ".jpeg", ".png", ".pdf" };
+
+    public DocumentService(SafeSeatedDbContext db, IConfiguration config, ILogger<DocumentService> logger)
+    {
+        _db = db;
+        _logger = logger;
+        _uploadPath = config["FileStorage:UploadPath"] ?? "C:\\SafeSeated\\Uploads\\";
+
+        // Ensure upload directory exists
+        if (!Directory.Exists(_uploadPath))
+            Directory.CreateDirectory(_uploadPath);
+    }
+
+    /// <summary>
+    /// Upload a document from byte array
+    /// </summary>
+    public async Task<(bool success, string message, Guid? documentId)> UploadDocumentAsync(
+        Guid userId, string documentType, byte[] fileContent, string fileName, string contentType)
+    {
+        try
+        {
+            // Validate file
+            if (fileContent == null || fileContent.Length == 0)
+                return (false, "No file provided", null);
+
+            if (fileContent.Length > _maxFileSize)
+                return (false, $"File size exceeds {_maxFileSize / (1024 * 1024)}MB limit", null);
+
+            var fileExtension = Path.GetExtension(fileName).ToLower();
+            if (!_allowedExtensions.Any(ext => ext == fileExtension))
+                return (false, "File type not allowed. Only JPG, PNG, PDF allowed", null);
+
+            // Validate document type
+            if (!Enum.TryParse<DocumentType>(documentType, out var docType))
+                return (false, "Invalid document type", null);
+
+            // Check if user exists
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null)
+                return (false, "User not found", null);
+
+            // Create unique filename
+            var uniqueFileName = $"{userId}_{docType}_{Guid.NewGuid()}{fileExtension}";
+            var filePath = Path.Combine(_uploadPath, uniqueFileName);
+
+            // Save file
+            await System.IO.File.WriteAllBytesAsync(filePath, fileContent);
+
+            // Create document record
+            var document = new UserDocument
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                DocumentType = docType,
+                StoredFilePath = filePath,
+                ContentType = contentType ?? "application/octet-stream",
+                Status = DocumentStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.UserDocuments.Add(document);
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Document uploaded: UserId={UserId}, Type={DocumentType}", userId, docType);
+            return (true, "Document uploaded successfully", document.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading document for UserId={UserId}", userId);
+            return (false, "Failed to upload document", null);
+        }
+    }
+
+    public async Task<(bool success, byte[]? fileData, string message)> DownloadDocumentAsync(Guid documentId)
+    {
+        try
+        {
+            var document = await _db.UserDocuments.FindAsync(documentId);
+            if (document == null)
+                return (false, null, "Document not found");
+
+            if (!File.Exists(document.StoredFilePath))
+                return (false, null, "File not found on disk");
+
+            var fileData = await File.ReadAllBytesAsync(document.StoredFilePath);
+            return (true, fileData, "");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading document");
+            return (false, null, "Failed to download document");
+        }
+    }
+
+    public async Task<UserDocumentsResponseDto> GetUserDocumentsAsync(Guid userId)
+    {
+        try
+        {
+            var documents = await _db.UserDocuments
+                .Where(d => d.UserId == userId)
+                .OrderByDescending(d => d.CreatedAt)
+                .Select(d => new DocumentDto
+                {
+                    Id = d.Id,
+                    UserId = d.UserId,
+                    DocumentType = d.DocumentType.ToString(),
+                    Status = d.Status.ToString(),
+                    RejectionReason = d.RejectionReason,
+                    CreatedAt = d.CreatedAt,
+                    ReviewedAt = d.ReviewedAt
+                })
+                .ToListAsync();
+
+            return new UserDocumentsResponseDto { Documents = documents };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting user documents");
+            return new();
+        }
+    }
+
+    /// <summary>
+    /// Delete a pending document
+    /// </summary>
+    public async Task<(bool success, string message)> DeleteDocumentAsync(Guid documentId, Guid userId)
+    {
+        try
+        {
+            var document = await _db.UserDocuments.FindAsync(documentId);
+            if (document == null)
+                return (false, "Document not found");
+
+            if (document.UserId != userId)
+                return (false, "Unauthorized");
+
+            if (document.Status != DocumentStatus.Pending)
+                return (false, "Cannot delete reviewed documents");
+
+            // Delete file
+            if (System.IO.File.Exists(document.StoredFilePath))
+                System.IO.File.Delete(document.StoredFilePath);
+
+            _db.UserDocuments.Remove(document);
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Document deleted: DocumentId={DocumentId}, UserId={UserId}", documentId, userId);
+            return (true, "Document deleted successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting document {DocumentId}", documentId);
+            return (false, "Failed to delete document");
+        }
+    }
+}

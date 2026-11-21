@@ -1,0 +1,1417 @@
+﻿# SafeSeated Backend - REST API
+
+**A production-ready ASP.NET Core 8 REST API for a women-only university carpooling platform**
+
+![.NET](https://img.shields.io/badge/.NET-8.0-blue)
+![SQL Server](https://img.shields.io/badge/SQL%20Server-LocalDB-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+![Status](https://img.shields.io/badge/Status-Production%20Ready-success)
+
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Architecture](#architecture)
+- [Technology Stack](#technology-stack)
+- [Getting Started](#getting-started)
+- [API Documentation](#api-documentation)
+- [Configuration](#configuration)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Overview
+
+**SafeSeated** is a university carpooling platform designed specifically for women in Karachi, Pakistan. The backend provides a complete REST API for:
+
+- User authentication and role-based authorization
+- Ride creation, search, and booking management
+- Real-time communication between passengers and drivers
+- Document verification (KYC) workflow
+- Payment receipt submission and admin approval
+- Safety features (SOS alerts, complaint management)
+- Driver wallet and earnings tracking
+- Comprehensive admin dashboard
+
+This implementation prioritizes:
+- ✅ **Simplicity** - Clean, pragmatic code without over-engineering
+- ✅ **Security** - JWT auth, role-based access, HTTPS
+- ✅ **Reliability** - Concurrency handling, error management
+- ✅ **Maintainability** - Layered architecture, well-documented
+- ✅ **Performance** - Optimized queries, proper indexing
+
+---
+
+## Key Features
+
+### 🔐 Authentication & Security
+- JWT-based authentication (15-min access token, 7-day refresh token)
+- BCrypt password hashing with salt
+- Role-based authorization (Passenger, Driver, Admin)
+- Refresh token rotation and revocation
+- Rate limiting on auth endpoints
+- CORS configured for Flutter frontend
+
+### 👤 User Management
+- Passenger and Driver registration with validation
+- Pakistani phone number and CNIC format validation
+- Profile management and updates
+- User status tracking (Pending, Active, Suspended, Rejected)
+- Email and phone uniqueness enforcement
+- Account suspension and reactivation
+
+### 📄 Document Management & KYC
+- Secure file upload (PDF, JPG, PNG, max 10MB)
+- Document type tracking (CNIC, Driving License, etc.)
+- Admin approval/rejection workflow
+- Automatic user verification on document approval
+- Document download with authorization
+- Rejection reason tracking
+
+### 🚗 Rides & Bookings
+- Ride creation with seat capacity and pricing
+- Advanced ride search with filters (location, date, seats)
+- Booking request workflow (Pending → Accepted → Completed)
+- Seat availability with **concurrency safety**
+- Automatic race condition handling with retry logic
+- Booking cancellation with notifications
+- Driver and passenger rating system
+
+### 💬 Chat & Messaging
+- REST-based real-time messaging (no SignalR needed)
+- Message read tracking
+- Unread message count
+- Chat thread management
+- Only active bookings can have messages
+- Automatic message fetching for mobile apps
+
+### 🚨 Safety Features
+- **SOS Emergency Alerts** - Quick emergency contact
+- **Complaint Filing** - Passengers can report driver behavior
+- **Admin Resolution** - Track and resolve incidents
+- **Audit Trail** - Notes and resolution history
+- Status tracking (Reported, Acknowledged, Resolved)
+
+### 💳 Payment & Wallet Management
+- Automatic 20% service fee calculation
+- Payment receipt upload (PDF/image, max 5MB)
+- Admin approval workflow
+- Driver wallet with real-time balance
+- Earnings reports and transaction history
+- Payment method tracking (EasyPaisa, JazzCash, Bank Transfer)
+- Reconciliation reports
+
+### 📊 Admin Dashboard
+- **Statistics Dashboard**:
+  - User count (total, passengers, drivers)
+  - Pending verifications
+  - Active and completed rides
+  - Revenue metrics
+  - Open complaints and SOS alerts
+
+- **User Management**:
+  - Approve/reject registrations
+  - Suspend/reactivate users
+  - View user documents
+
+- **Document Management**:
+  - Review pending documents
+  - Approve/reject with reasons
+  - Track verification status
+
+- **Payment Management**:
+  - Review submitted payments
+  - Approve/reject receipts
+  - Revenue analytics
+
+- **Incident Management**:
+  - View and resolve SOS alerts
+  - Manage complaints
+  - Update status with notes
+
+### 📝 Additional Features
+- Global exception handling with proper HTTP status codes
+- Structured logging (Information, Warning, Error levels)
+- Pagination support for list endpoints
+- Swagger/OpenAPI documentation
+- Role-based endpoint access
+- Soft deletes for audit trail
+- Timestamp tracking (CreatedAt, UpdatedAt)
+
+---
+
+## Architecture
+
+### Project Structure
+
+```
+Safe_Seated_App_Backend/
+│
+├── SafeSeated.Api/
+│   ├── Controllers/           # API endpoints
+│   │   ├── AuthController.cs
+│   │   ├── ProfileController.cs
+│   │   ├── DocumentController.cs
+│   │   ├── ChatController.cs
+│   │   ├── SafetyController.cs
+│   │   ├── PaymentController.cs
+│   │   ├── AdminController.cs
+│   │   ├── AdminDashboardController.cs
+│   │   ├── RidesController.cs
+│   │   └── BookingsController.cs
+│   ├── Middleware/            # Exception handling, CORS
+│   ├── Program.cs             # DI container, Swagger, Auth setup
+│   ├── appsettings.json       # Configuration
+│   └── launchSettings.json    # Launch profiles
+│
+├── SafeSeated.Application/
+│   ├── DTOs/                  # Data Transfer Objects
+│   │   ├── AuthDtos.cs
+│   │   ├── ProfileDtos.cs
+│   │   ├── DocumentDtos.cs
+│   │   ├── ChatDtos.cs
+│   │   ├── PaymentDtos.cs
+│   │   ├── SafetyDtos.cs
+│   │   └── AdminDtos.cs
+│   └── Services/              # Business logic
+│       ├── AuthService.cs
+│       ├── UserService.cs
+│       ├── DocumentService.cs
+│       ├── ChatService.cs
+│       ├── SafetyService.cs
+│       ├── PaymentService.cs
+│       ├── AdminService.cs
+│       ├── RideService.cs
+│       ├── BookingService.cs
+│       ├── NotificationService.cs
+│       └── RideRequestService.cs
+│
+├── SafeSeated.Domain/
+│   ├── Entities/              # EF Core models
+│   │   ├── User.cs
+│   │   ├── PassengerProfile.cs
+│   │   ├── DriverProfile.cs
+│   │   ├── Document.cs
+│   │   ├── Ride.cs
+│   │   ├── Booking.cs
+│   │   ├── Message.cs
+│   │   ├── Notification.cs
+│   │   ├── PaymentReceipt.cs
+│   │   ├── RefreshToken.cs
+│   │   ├── SOS.cs
+│   │   ├── Complaint.cs
+│   │   ├── RideRequest.cs
+│   │   └── Entity.cs (base class)
+│   └── Enums/                 # Status enums
+│       ├── UserRole.cs
+│       ├── UserStatus.cs
+│       ├── DocumentType.cs
+│       └── DocumentStatus.cs
+│
+├── SafeSeated.Infrastructure/
+│   ├── Data/
+│   │   ├── SafeSeatedDbContext.cs   # DbContext
+│   │   ├── DbInitializer.cs         # Migrations & seeding
+│   │   └── Configurations/          # EF configurations
+│   ├── Services/              # Infrastructure services
+│   │   └── FileStorageService.cs
+│   └── Migrations/            # EF Core migrations
+│
+├── SafeSeated.Tests/
+│   └── Unit tests (xUnit + Moq)
+│
+└── README.md                  # This file
+```
+
+### Layered Architecture
+
+```
+┌─────────────────────────────────────┐
+│      SafeSeated.Api (Controllers)   │  ← HTTP Requests
+├─────────────────────────────────────┤
+│  SafeSeated.Application (Services)  │  ← Business Logic
+├─────────────────────────────────────┤
+│    SafeSeated.Domain (Entities)     │  ← Data Models
+├─────────────────────────────────────┤
+│ SafeSeated.Infrastructure (DbContext)│ ← Database Access
+├─────────────────────────────────────┤
+│        SQL Server (LocalDB)         │  ← Persistence
+└─────────────────────────────────────┘
+```
+
+---
+
+## Technology Stack
+
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| Language | C# | 12 |
+| Framework | ASP.NET Core | 8.0 |
+| Database | SQL Server | LocalDB |
+| ORM | Entity Framework Core | 8.0 |
+| Authentication | JWT/Bearer | OpenID |
+| Password Hash | BCrypt.Net | Latest |
+| Testing | xUnit + Moq | Latest |
+| Documentation | Swagger/OpenAPI | 3.0 |
+| File Storage | Local Disk | C:\SafeSeated\Uploads\ |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **.NET 8 SDK** - [Download](https://dotnet.microsoft.com/download/dotnet/8.0)
+- **SQL Server** - Express or LocalDB (included with Visual Studio)
+- **Visual Studio 2026** - Community or Professional
+- **Git** - For cloning the repository
+
+### Installation
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/your-repo/SafeSeated.git
+cd Safe_Seated_App_Backend
+```
+
+2. **Restore NuGet packages**
+```bash
+dotnet restore
+```
+
+3. **Update database**
+```bash
+dotnet ef database update --project SafeSeated.Infrastructure
+```
+
+This will:
+- Create the SafeSeatedDb database
+- Apply all migrations
+- Seed initial data (admin user, demo users)
+
+4. **Build the solution**
+```bash
+dotnet build
+```
+
+### Running the Application
+
+#### Using Visual Studio
+1. Open `Safe_Seated_App_Backend.slnx` in Visual Studio 2026
+2. Set `SafeSeated.Api` as the startup project
+3. Press `F5` to run with debugging
+
+#### Using .NET CLI
+```bash
+dotnet run --project SafeSeated.Api
+```
+
+The API starts at: `https://localhost:7241`
+
+### Access Swagger
+
+Open your browser and navigate to:
+```
+https://localhost:7241/swagger/index.html
+```
+
+---
+
+## API Documentation
+
+### Base URL
+```
+https://localhost:7241/api/v1
+```
+
+### Authentication
+
+All endpoints (except login/register) require JWT Bearer token:
+
+```
+Authorization: Bearer <access_token>
+```
+
+Get token via Login endpoint, then click **Authorize** in Swagger to test.
+
+### Response Format
+
+#### Success Response (200, 201)
+```json
+{
+  "data": { /* response data */ },
+  "message": "Operation successful"
+}
+```
+
+#### Error Response (4xx, 5xx)
+```json
+{
+  "error": "Description of error",
+  "details": { /* optional validation errors */ }
+}
+```
+
+---
+
+## Auth Endpoints
+
+### Register Passenger
+```http
+POST /auth/register/passenger
+Content-Type: application/json
+
+{
+  "fullName": "Ayesha Khan",
+  "email": "ayesha@example.com",
+  "phone": "03001234567",
+  "cnic": "12345-6789012-3",
+  "password": "SecurePass@123",
+  "university": "FAST NUCES",
+  "studentId": "F21-1234",
+  "programAndSemester": "CS-7A",
+  "emergencyContactName": "Mother",
+  "emergencyContactPhone": "03009876543"
+}
+
+Response: 201 Created
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "message": "Registration successful. Awaiting admin approval."
+}
+```
+
+### Register Driver
+```http
+POST /auth/register/driver
+Content-Type: application/json
+
+{
+  "fullName": "Fatima Ali",
+  "email": "fatima@example.com",
+  "phone": "03211234567",
+  "cnic": "12345-6789012-3",
+  "password": "SecurePass@123",
+  "city": "Karachi",
+  "licenseNumber": "DL-2024-001",
+  "vehicleMakeModel": "Honda City",
+  "vehicleColor": "Silver",
+  "plateNumber": "KHI-123",
+  "vehicleModelYear": 2023,
+  "seatsForPassengers": 3,
+  "vehicleRegistrationNumber": "REG-2024-001"
+}
+
+Response: 201 Created
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "message": "Registration successful. Awaiting admin approval and document verification."
+}
+```
+
+### Login
+```http
+POST /auth/login
+Content-Type: application/json
+
+{
+  "email": "ayesha@example.com",
+  "password": "SecurePass@123"
+}
+
+Response: 200 OK
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresIn": 900,
+  "user": {
+	"id": "550e8400-e29b-41d4-a716-446655440000",
+	"fullName": "Ayesha Khan",
+	"email": "ayesha@example.com",
+	"phone": "03001234567",
+	"role": "Passenger",
+	"status": "Approved"
+  }
+}
+```
+
+### Refresh Token
+```http
+POST /auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+
+Response: 200 OK
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresIn": 900
+}
+```
+
+### Change Password
+```http
+POST /auth/change-password
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "currentPassword": "SecurePass@123",
+  "newPassword": "NewPass@456"
+}
+
+Response: 200 OK
+{
+  "message": "Password changed successfully"
+}
+```
+
+---
+
+## Profile Endpoints
+
+### Get My Profile
+```http
+GET /profile
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "fullName": "Ayesha Khan",
+  "email": "ayesha@example.com",
+  "phone": "03001234567",
+  "role": "Passenger",
+  "status": "Approved",
+  "passengerProfile": {
+	"university": "FAST NUCES",
+	"studentId": "F21-1234",
+	"programAndSemester": "CS-7A",
+	"emergencyContactName": "Mother",
+	"emergencyContactPhone": "03009876543"
+  }
+}
+```
+
+### Get User Profile (Public)
+```http
+GET /profile/{userId}
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "fullName": "Ayesha Khan",
+  "phone": "03001234567",
+  "role": "Passenger"
+}
+```
+
+### Get Driver Profile
+```http
+GET /profile/driver/{driverId}
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440001",
+  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "city": "Karachi",
+  "licenseNumber": "DL-2024-001",
+  "vehicleMakeModel": "Honda City",
+  "vehicleColor": "Silver",
+  "plateNumber": "KHI-123",
+  "vehicleModelYear": 2023,
+  "seatsForPassengers": 3,
+  "isOnline": true,
+  "averageRating": 4.8
+}
+```
+
+---
+
+## Document Endpoints
+
+### Upload Document
+```http
+POST /document/upload
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+{
+  "documentType": "CNIC",
+  "file": <file.pdf>
+}
+
+Response: 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440010",
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "documentType": "CNIC",
+  "fileName": "cnic_document.pdf",
+  "status": "Pending",
+  "uploadedAt": "2024-01-15T10:30:00Z"
+}
+```
+
+### Get My Documents
+```http
+GET /document/my-documents
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "documents": [
+	{
+	  "id": "550e8400-e29b-41d4-a716-446655440010",
+	  "documentType": "CNIC",
+	  "fileName": "cnic_document.pdf",
+	  "status": "Approved",
+	  "uploadedAt": "2024-01-15T10:30:00Z",
+	  "approvedAt": "2024-01-15T11:00:00Z"
+	}
+  ],
+  "allApproved": true,
+  "approvedCount": 1,
+  "pendingCount": 0,
+  "rejectedCount": 0
+}
+```
+
+### Download Document
+```http
+GET /document/download/{documentId}
+Authorization: Bearer <token>
+
+Response: 200 OK (file binary)
+```
+
+### Admin: Get Pending Documents
+```http
+GET /document/admin/pending
+Authorization: Bearer <admin-token>
+
+Response: 200 OK
+{
+  "documents": [...]
+}
+```
+
+### Admin: Approve Document
+```http
+POST /document/admin/approve
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "documentId": "550e8400-e29b-41d4-a716-446655440010"
+}
+
+Response: 200 OK
+{
+  "message": "Document approved successfully",
+  "data": { /* updated document */ }
+}
+```
+
+### Admin: Reject Document
+```http
+POST /document/admin/reject
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "documentId": "550e8400-e29b-41d4-a716-446655440010",
+  "reason": "Document unclear or expired"
+}
+
+Response: 200 OK
+{
+  "message": "Document rejected successfully",
+  "data": { /* updated document */ }
+}
+```
+
+---
+
+## Chat Endpoints
+
+### Send Message
+```http
+POST /chat/send
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "bookingId": "550e8400-e29b-41d4-a716-446655440020",
+  "message": "I'm arriving in 5 minutes"
+}
+
+Response: 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440025",
+  "bookingId": "550e8400-e29b-41d4-a716-446655440020",
+  "senderId": "550e8400-e29b-41d4-a716-446655440000",
+  "senderName": "Ayesha Khan",
+  "message": "I'm arriving in 5 minutes",
+  "isRead": false,
+  "sentAt": "2024-01-15T14:30:00Z"
+}
+```
+
+### Get Chat Thread
+```http
+GET /chat/thread/{bookingId}
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "bookingId": "550e8400-e29b-41d4-a716-446655440020",
+  "passengerName": "Ayesha Khan",
+  "driverName": "Fatima Ali",
+  "rideDetails": "Gulshan-e-Iqbal → Saddar",
+  "messages": [
+	{
+	  "id": "550e8400-e29b-41d4-a716-446655440025",
+	  "senderId": "550e8400-e29b-41d4-a716-446655440001",
+	  "senderName": "Fatima Ali",
+	  "message": "I'm here",
+	  "isRead": true,
+	  "sentAt": "2024-01-15T14:25:00Z"
+	},
+	{
+	  "id": "550e8400-e29b-41d4-a716-446655440026",
+	  "senderId": "550e8400-e29b-41d4-a716-446655440000",
+	  "senderName": "Ayesha Khan",
+	  "message": "I'm arriving in 5 minutes",
+	  "isRead": false,
+	  "sentAt": "2024-01-15T14:30:00Z"
+	}
+  ],
+  "unreadCount": 0
+}
+```
+
+### Get My Chats
+```http
+GET /chat/my-chats
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "chats": [
+	{
+	  "bookingId": "550e8400-e29b-41d4-a716-446655440020",
+	  "passengerName": "Ayesha Khan",
+	  "driverName": "Fatima Ali",
+	  "rideDetails": "Gulshan-e-Iqbal → Saddar",
+	  "unreadCount": 0
+	}
+  ]
+}
+```
+
+### Get Unread Count
+```http
+GET /chat/unread-count
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "unreadCount": 3
+}
+```
+
+---
+
+## Ride Endpoints
+
+### Create Ride (Driver Only)
+```http
+POST /rides/create
+Authorization: Bearer <driver-token>
+Content-Type: application/json
+
+{
+  "departureLocation": "Gulshan-e-Iqbal",
+  "destinationLocation": "Saddar",
+  "departureTime": "2024-01-15T14:00:00Z",
+  "seatsAvailable": 3,
+  "pricePerSeat": 500
+}
+
+Response: 201 Created
+{
+  "id": "550e8400-e29b-41d4-a716-446655440030",
+  "driverId": "550e8400-e29b-41d4-a716-446655440001",
+  "departureLocation": "Gulshan-e-Iqbal",
+  "destinationLocation": "Saddar",
+  "departureTime": "2024-01-15T14:00:00Z",
+  "seatsAvailable": 3,
+  "pricePerSeat": 500,
+  "status": "Active"
+}
+```
+
+### Search Rides
+```http
+GET /rides/search?departure=Gulshan&destination=Saddar&date=2024-01-15&seats=1
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "rides": [
+	{
+	  "id": "550e8400-e29b-41d4-a716-446655440030",
+	  "driverName": "Fatima Ali",
+	  "departureLocation": "Gulshan-e-Iqbal",
+	  "destinationLocation": "Saddar",
+	  "departureTime": "2024-01-15T14:00:00Z",
+	  "seatsAvailable": 3,
+	  "pricePerSeat": 500,
+	  "driverRating": 4.8
+	}
+  ]
+}
+```
+
+### Get Ride Details
+```http
+GET /rides/{rideId}
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440030",
+  "driverId": "550e8400-e29b-41d4-a716-446655440001",
+  "driverName": "Fatima Ali",
+  "departureLocation": "Gulshan-e-Iqbal",
+  "destinationLocation": "Saddar",
+  "departureTime": "2024-01-15T14:00:00Z",
+  "seatsAvailable": 3,
+  "pricePerSeat": 500
+}
+```
+
+---
+
+## Booking Endpoints
+
+### Create Booking (Passenger Only)
+```http
+POST /bookings/create
+Authorization: Bearer <passenger-token>
+Content-Type: application/json
+
+{
+  "rideId": "550e8400-e29b-41d4-a716-446655440030",
+  "seatsRequested": 1
+}
+
+Response: 201 Created
+{
+  "id": "550e8400-e29b-41d4-a716-446655440020",
+  "rideId": "550e8400-e29b-41d4-a716-446655440030",
+  "passengerId": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "Pending",
+  "amount": 500,
+  "createdAt": "2024-01-15T10:00:00Z"
+}
+```
+
+### Accept Booking (Driver Only)
+```http
+POST /bookings/{bookingId}/accept
+Authorization: Bearer <driver-token>
+
+Response: 200 OK
+{
+  "message": "Booking accepted",
+  "data": {
+	"id": "550e8400-e29b-41d4-a716-446655440020",
+	"status": "Accepted"
+  }
+}
+```
+
+### Complete Booking (Driver Only)
+```http
+POST /bookings/{bookingId}/complete
+Authorization: Bearer <driver-token>
+
+Response: 200 OK
+{
+  "message": "Booking completed",
+  "data": {
+	"id": "550e8400-e29b-41d4-a716-446655440020",
+	"status": "Completed"
+  }
+}
+```
+
+### Rate Booking (Passenger Only)
+```http
+POST /bookings/{bookingId}/rate
+Authorization: Bearer <passenger-token>
+Content-Type: application/json
+
+{
+  "driverRating": 5,
+  "driverReview": "Great driver, safe and on time!"
+}
+
+Response: 200 OK
+{
+  "message": "Booking rated successfully"
+}
+```
+
+---
+
+## Payment Endpoints
+
+### Submit Payment Receipt
+```http
+POST /payment/submit-receipt
+Authorization: Bearer <driver-token>
+Content-Type: multipart/form-data
+
+{
+  "bookingId": "550e8400-e29b-41d4-a716-446655440020",
+  "paymentMethod": "EasyPaisa",
+  "transactionReference": "TXN123456789",
+  "receiptFile": <receipt.pdf>
+}
+
+Response: 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440050",
+  "bookingId": "550e8400-e29b-41d4-a716-446655440020",
+  "driverId": "550e8400-e29b-41d4-a716-446655440001",
+  "amount": 100,
+  "paymentMethod": "EasyPaisa",
+  "transactionReference": "TXN123456789",
+  "status": "Submitted",
+  "submittedAt": "2024-01-15T15:00:00Z"
+}
+```
+
+### Get Wallet Summary
+```http
+GET /payment/wallet-summary
+Authorization: Bearer <driver-token>
+
+Response: 200 OK
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440001",
+  "driverName": "Fatima Ali",
+  "balance": 400,
+  "totalEarnings": 1500,
+  "totalFeePaid": 300,
+  "completedRides": 3,
+  "recentTransactions": [
+	{
+	  "id": "550e8400-e29b-41d4-a716-446655440051",
+	  "amount": 500,
+	  "transactionType": "Earning",
+	  "description": "Ride Gulshan → Saddar",
+	  "createdAt": "2024-01-15T14:30:00Z"
+	}
+  ]
+}
+```
+
+### Admin: Get Pending Payments
+```http
+GET /payment/admin/pending
+Authorization: Bearer <admin-token>
+
+Response: 200 OK
+{
+  "payments": [...]
+}
+```
+
+### Admin: Approve Payment
+```http
+POST /payment/admin/approve
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "paymentId": "550e8400-e29b-41d4-a716-446655440050"
+}
+
+Response: 200 OK
+{
+  "message": "Payment approved",
+  "data": { /* updated payment */ }
+}
+```
+
+---
+
+## Safety Endpoints
+
+### Create SOS Alert
+```http
+POST /safety/sos/create
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "bookingId": "550e8400-e29b-41d4-a716-446655440020",
+  "description": "I feel unsafe, driver is driving recklessly"
+}
+
+Response: 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440060",
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "description": "I feel unsafe, driver is driving recklessly",
+  "status": "Reported",
+  "createdAt": "2024-01-15T14:35:00Z"
+}
+```
+
+### File Complaint (Passenger Only)
+```http
+POST /safety/complaint/create
+Authorization: Bearer <passenger-token>
+Content-Type: application/json
+
+{
+  "bookingId": "550e8400-e29b-41d4-a716-446655440020",
+  "reason": "Rash Driving",
+  "description": "Driver ignored traffic signals and drove very fast"
+}
+
+Response: 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440070",
+  "bookingId": "550e8400-e29b-41d4-a716-446655440020",
+  "passengerId": "550e8400-e29b-41d4-a716-446655440000",
+  "driverId": "550e8400-e29b-41d4-a716-446655440001",
+  "reason": "Rash Driving",
+  "description": "Driver ignored traffic signals and drove very fast",
+  "status": "Open",
+  "createdAt": "2024-01-15T15:00:00Z"
+}
+```
+
+### Admin: Get Pending SOS Alerts
+```http
+GET /safety/admin/sos/pending
+Authorization: Bearer <admin-token>
+
+Response: 200 OK
+{
+  "alerts": [...]
+}
+```
+
+### Admin: Resolve Complaint
+```http
+POST /safety/admin/complaint/update-status
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "complaintId": "550e8400-e29b-41d4-a716-446655440070",
+  "status": "Resolved",
+  "adminNotes": "Spoke with driver. Confirmed traffic signal violation. Warning issued."
+}
+
+Response: 200 OK
+{
+  "message": "Complaint status updated"
+}
+```
+
+---
+
+## Admin Endpoints
+
+### Get Dashboard Statistics
+```http
+GET /admin/dashboard/stats
+Authorization: Bearer <admin-token>
+
+Response: 200 OK
+{
+  "totalUsers": 150,
+  "totalPassengers": 90,
+  "totalDrivers": 60,
+  "pendingVerifications": 12,
+  "activeRides": 25,
+  "completedRides": 450,
+  "pendingPayments": 8,
+  "totalEarnings": 45000,
+  "openComplaints": 3,
+  "pendingSosAlerts": 1
+}
+```
+
+### Get Revenue Statistics
+```http
+GET /admin/dashboard/revenue
+Authorization: Bearer <admin-token>
+
+Response: 200 OK
+{
+  "totalCollected": 45000,
+  "pendingApproval": 2000,
+  "paymentsProcessed": 450,
+  "lastPaymentDate": "2024-01-15T15:30:00Z"
+}
+```
+
+### Get Ride Statistics
+```http
+GET /admin/dashboard/rides
+Authorization: Bearer <admin-token>
+
+Response: 200 OK
+{
+  "totalRides": 475,
+  "completedRides": 450,
+  "cancelledRides": 25,
+  "averageRating": 4.6
+}
+```
+
+### Get Pending Users
+```http
+GET /admin/users
+Authorization: Bearer <admin-token>
+
+Response: 200 OK
+{
+  "users": [
+	{
+	  "id": "550e8400-e29b-41d4-a716-446655440000",
+	  "name": "Ayesha Khan",
+	  "email": "ayesha@example.com",
+	  "phone": "03001234567",
+	  "role": "Passenger",
+	  "status": "Pending",
+	  "registeredAt": "2024-01-15T10:00:00Z"
+	}
+  ]
+}
+```
+
+### Approve User
+```http
+POST /admin/users/{userId}/approve
+Authorization: Bearer <admin-token>
+
+Response: 200 OK
+{
+  "message": "User approved successfully"
+}
+```
+
+### Reject User
+```http
+POST /admin/users/{userId}/reject
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "reason": "Document verification failed"
+}
+
+Response: 200 OK
+{
+  "message": "User rejected successfully"
+}
+```
+
+---
+
+## Configuration
+
+### appsettings.json
+
+```json
+{
+  "ConnectionStrings": {
+	"DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SafeSeatedDb;Trusted_Connection=true;MultipleActiveResultSets=true"
+  },
+  "Jwt": {
+	"SecretKey": "your-secret-key-change-this-in-production-minimum-32-characters-required",
+	"Issuer": "SafeSeated",
+	"Audience": "SafeSeatedClient",
+	"AccessTokenExpiryMinutes": 15,
+	"RefreshTokenExpiryDays": 7
+  },
+  "ServiceFee": {
+	"PercentageOfEarnings": 20.0
+  },
+  "FileStorage": {
+	"UploadPath": "C:\\SafeSeated\\Uploads",
+	"MaxFileSizeBytes": 5242880,
+	"AllowedExtensions": [ "jpg", "jpeg", "png", "pdf" ]
+  },
+  "Pagination": {
+	"DefaultPageSize": 10,
+	"MaxPageSize": 100
+  },
+  "RateLimiting": {
+	"AuthEndpointLimit": 5,
+	"AuthEndpointWindowSeconds": 900
+  },
+  "Logging": {
+	"LogLevel": {
+	  "Default": "Information",
+	  "Microsoft": "Warning",
+	  "Microsoft.EntityFrameworkCore": "Information"
+	}
+  }
+}
+```
+
+---
+
+## Testing
+
+### Run Unit Tests
+```bash
+dotnet test
+```
+
+### Run Specific Test Category
+```bash
+dotnet test --filter "TestClassName"
+```
+
+### Test Coverage
+```bash
+dotnet test /p:CollectCoverage=true
+```
+
+### Manual Testing with Swagger
+
+1. Go to `https://localhost:7241/swagger`
+2. Click **Authorize** button
+3. Login with test account (register first)
+4. Copy access token
+5. Test endpoints with token
+
+---
+
+## Default Test Accounts
+
+After running migrations, these accounts are automatically seeded:
+
+### Admin
+- **Email:** `admin@safeseated.com`
+- **Password:** `Admin@123456`
+- **Role:** Admin
+
+### Demo Passenger
+- **Email:** `passenger1@safeseated.com`
+- **Password:** `Passenger@123456`
+- **Role:** Passenger (Approved)
+
+### Demo Driver
+- **Email:** `driver1@safeseated.com`
+- **Password:** `Driver@123456`
+- **Role:** Driver (Approved)
+
+---
+
+## Error Handling
+
+### HTTP Status Codes
+
+| Code | Meaning | Example |
+|------|---------|---------|
+| 200 | OK | Request successful |
+| 201 | Created | Resource created |
+| 400 | Bad Request | Invalid input |
+| 401 | Unauthorized | No/invalid token |
+| 403 | Forbidden | Access denied |
+| 404 | Not Found | Resource not found |
+| 409 | Conflict | Concurrency error |
+| 422 | Unprocessable | Validation failed |
+| 500 | Server Error | Internal error |
+
+### Error Response Format
+
+```json
+{
+  "error": "Invalid email or password",
+  "details": {
+	"email": ["Email is required"],
+	"password": ["Password must be at least 8 characters"]
+  }
+}
+```
+
+---
+
+## Deployment
+
+### Production Checklist
+
+- [ ] Update `appsettings.Production.json`
+- [ ] Configure production SQL Server connection
+- [ ] Generate strong JWT secret key (32+ characters)
+- [ ] Set file storage path (network share or cloud storage)
+- [ ] Enable HTTPS and configure SSL certificate
+- [ ] Set CORS origins to production domain
+- [ ] Configure logging to track production issues
+- [ ] Set up database backups
+- [ ] Create and migrate production database
+- [ ] Test all critical endpoints
+- [ ] Configure application monitoring
+- [ ] Set up error tracking (e.g., Sentry)
+
+### Deploy to IIS
+
+```bash
+# Build release
+dotnet publish -c Release -o ./publish
+
+# Configure IIS:
+# 1. Create new site pointing to publish folder
+# 2. Set application pool to .NET CLR version (No Managed Code)
+# 3. Configure bindings (HTTPS)
+# 4. Set environment variables:
+#    - ASPNETCORE_ENVIRONMENT=Production
+#    - Connection string
+#    - JWT secret
+```
+
+### Deploy to Azure App Service
+
+```bash
+# Create resource group
+az group create --name SafeSeatedRG --location eastasia
+
+# Create App Service plan
+az appservice plan create --name SafeSeatedPlan --resource-group SafeSeatedRG --sku B1
+
+# Create web app
+az webapp create --name safeseated-api --plan SafeSeatedPlan --resource-group SafeSeatedRG
+
+# Configure app settings
+az webapp config appsettings set --name safeseated-api --resource-group SafeSeatedRG \
+  --settings ASPNETCORE_ENVIRONMENT=Production
+
+# Publish
+dotnet publish -c Release
+# Upload publish folder to Azure
+```
+
+---
+
+## Troubleshooting
+
+### Database Connection Error
+
+**Error:** `Server=(localdb)\mssqllocaldb not found`
+
+**Solution:**
+```bash
+# Create LocalDB instance
+sqllocaldb create mssqllocaldb
+
+# Start LocalDB
+sqllocaldb start mssqllocaldb
+```
+
+### JWT Token Expired
+
+**Error:** `Token expired`
+
+**Solution:**
+1. Use refresh endpoint to get new token
+2. Or login again to get new tokens
+
+### File Upload Fails
+
+**Error:** `File size exceeds limit`
+
+**Solution:**
+- Document max: 10MB
+- Payment receipt max: 5MB
+- Allowed formats: PDF, JPG, PNG
+
+### Concurrency Error (409)
+
+**Error:** `DbUpdateConcurrencyException`
+
+**Solution:**
+- This is expected when multiple bookings try to book last seats
+- Client should implement exponential backoff retry
+- Wait 100ms, then retry request
+
+### Port Already in Use
+
+**Error:** `ASPNETCORE_URLS binding failed`
+
+**Solution:**
+```bash
+# Change port in launchSettings.json
+# Or kill process using port:
+netstat -ano | findstr :7241
+taskkill /PID <PID> /F
+```
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+### Code Standards
+
+- Follow C# naming conventions (PascalCase for classes, camelCase for variables)
+- Use async/await for I/O operations
+- Document public methods with XML comments
+- Write unit tests for business logic
+- Use dependency injection for testability
+
+---
+
+## License
+
+This project is licensed under the MIT License - see LICENSE file for details.
+
+---
+
+## Support
+
+For issues, questions, or suggestions:
+1. Check this README
+2. Review IMPLEMENTATION_GUIDE.md
+3. Check TESTING_GUIDE.md
+4. Open an issue on GitHub
+5. Contact: support@safeseated.com
+
+---
+
+## Acknowledgments
+
+- Built with ASP.NET Core 8
+- Designed for Flutter mobile frontend
+- Optimized for Pakistani market
+- Security-first architecture
+
+---
+
+**Last Updated:** January 2024  
+**Version:** 1.0.0  
+**Status:** ✅ Production Ready

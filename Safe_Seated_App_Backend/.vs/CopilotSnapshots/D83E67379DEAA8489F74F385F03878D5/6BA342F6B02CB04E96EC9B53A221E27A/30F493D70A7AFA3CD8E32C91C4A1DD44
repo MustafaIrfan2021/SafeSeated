@@ -1,0 +1,23 @@
+﻿using SafeSeated.Application.Dtos.Rides;
+
+namespace SafeSeated.Application.Services
+{
+    public interface IRideService
+    {
+        Task<RideDto> CreateRideAsync(Guid driverId, CreateRideDto dto, CancellationToken cancellationToken = default);
+        Task<RideDto> GetRideByIdAsync(Guid rideId, CancellationToken cancellationToken = default);
+        Task<(List<RideDto> Rides, int TotalCount)> SearchRidesAsync(
+            string pickupArea,
+            string destination,
+            DateTime? departureDate,
+            int page,
+            int pageSize,
+            int seatsNeeded,
+            string sortBy,
+            CancellationToken cancellationToken = default);
+        Task<List<RideDto>> GetDriverRidesAsync(Guid driverId, CancellationToken cancellationToken = default);
+        Task<RideDto> UpdateRideAsync(Guid rideId, CreateRideDto dto, CancellationToken cancellationToken = default);
+        Task<bool> DeleteRideAsync(Guid rideId, CancellationToken cancellationToken = default);
+        Task<bool> CancelRideAsync(Guid rideId, string reason = null, CancellationToken cancellationToken = default);
+    }
+}

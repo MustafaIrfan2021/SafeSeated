@@ -1,0 +1,218 @@
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using SafeSeated.Application.Dtos;
+using SafeSeated.Domain.Entities;
+using SafeSeated.Infrastructure.Data;
+
+namespace SafeSeated.Infrastructure.Services;
+
+/// <summary>
+/// User profile management service
+/// </summary>
+public class UserService
+{
+    private readonly SafeSeatedDbContext _db;
+    private readonly ILogger<UserService> _logger;
+
+    public UserService(SafeSeatedDbContext db, ILogger<UserService> logger)
+    {
+        _db = db;
+        _logger = logger;
+    }
+
+    public async Task<UserProfileDto?> GetUserProfileAsync(Guid userId)
+    {
+        try
+        {
+            var user = await _db.Users
+                .Include(u => u.PassengerProfile)
+                .Include(u => u.DriverProfile)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null)
+                return null;
+
+            return MapToUserProfileDto(user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting user profile");
+            return null;
+        }
+    }
+
+    public async Task<(bool success, string message)> UpdatePassengerProfileAsync(Guid userId, UpdatePassengerProfileDto dto)
+    {
+        try
+        {
+            var profile = await _db.PassengerProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (profile == null)
+                return (false, "Passenger profile not found");
+
+            if (!string.IsNullOrEmpty(dto.University))
+                profile.University = dto.University;
+            if (!string.IsNullOrEmpty(dto.StudentId))
+                profile.StudentId = dto.StudentId;
+            if (!string.IsNullOrEmpty(dto.ProgramAndSemester))
+                profile.ProgramAndSemester = dto.ProgramAndSemester;
+            if (!string.IsNullOrEmpty(dto.EmergencyContactName))
+                profile.EmergencyContactName = dto.EmergencyContactName;
+            if (!string.IsNullOrEmpty(dto.EmergencyContactPhone))
+                profile.EmergencyContactPhone = dto.EmergencyContactPhone;
+
+            await _db.SaveChangesAsync();
+            _logger.LogInformation($"Passenger profile updated: {userId}");
+            return (true, "Profile updated successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating passenger profile");
+            return (false, "Failed to update profile");
+        }
+    }
+
+    public async Task<(bool success, string message)> UpdateDriverProfileAsync(Guid userId, UpdateDriverProfileDto dto)
+    {
+        try
+        {
+            var profile = await _db.DriverProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (profile == null)
+                return (false, "Driver profile not found");
+
+            if (!string.IsNullOrEmpty(dto.City))
+                profile.City = dto.City;
+            if (!string.IsNullOrEmpty(dto.LicenseNumber))
+                profile.LicenseNumber = dto.LicenseNumber;
+            if (!string.IsNullOrEmpty(dto.VehicleMakeModel))
+                profile.VehicleMakeModel = dto.VehicleMakeModel;
+            if (!string.IsNullOrEmpty(dto.VehicleColor))
+                profile.VehicleColor = dto.VehicleColor;
+            if (!string.IsNullOrEmpty(dto.PlateNumber))
+                profile.PlateNumber = dto.PlateNumber;
+            if (dto.VehicleModelYear > 0)
+                profile.VehicleModelYear = dto.VehicleModelYear;
+            if (dto.SeatsForPassengers > 0)
+                profile.SeatsForPassengers = dto.SeatsForPassengers;
+            if (!string.IsNullOrEmpty(dto.VehicleRegistrationNumber))
+                profile.VehicleRegistrationNumber = dto.VehicleRegistrationNumber;
+
+            profile.IsOnline = dto.IsOnline;
+
+            await _db.SaveChangesAsync();
+            _logger.LogInformation($"Driver profile updated: {userId}");
+            return (true, "Profile updated successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating driver profile");
+            return (false, "Failed to update profile");
+        }
+    }
+
+    public async Task<PassengerProfileDto?> GetPassengerProfileAsync(Guid userId)
+    {
+        try
+        {
+            var profile = await _db.PassengerProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (profile == null)
+                return null;
+
+            return new PassengerProfileDto
+            {
+                Id = profile.Id,
+                UserId = profile.UserId,
+                University = profile.University,
+                StudentId = profile.StudentId,
+                ProgramAndSemester = profile.ProgramAndSemester,
+                EmergencyContactName = profile.EmergencyContactName,
+                EmergencyContactPhone = profile.EmergencyContactPhone
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting passenger profile");
+            return null;
+        }
+    }
+
+    public async Task<DriverProfileDto?> GetDriverProfileAsync(Guid userId)
+    {
+        try
+        {
+            var profile = await _db.DriverProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (profile == null)
+                return null;
+
+            return new DriverProfileDto
+            {
+                Id = profile.Id,
+                UserId = profile.UserId,
+                City = profile.City,
+                LicenseNumber = profile.LicenseNumber,
+                VehicleMakeModel = profile.VehicleMakeModel,
+                VehicleColor = profile.VehicleColor,
+                PlateNumber = profile.PlateNumber,
+                VehicleModelYear = profile.VehicleModelYear,
+                SeatsForPassengers = profile.SeatsForPassengers,
+                VehicleRegistrationNumber = profile.VehicleRegistrationNumber,
+                IsOnline = profile.IsOnline,
+                AverageRating = profile.AverageRating
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting driver profile");
+            return null;
+        }
+    }
+
+    private UserProfileDto MapToUserProfileDto(User user)
+    {
+        var dto = new UserProfileDto
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Email = user.Email,
+            Phone = user.Phone,
+            Cnic = user.Cnic,
+            Role = user.Role.ToString(),
+            Status = user.Status.ToString(),
+            RejectionReason = user.RejectionReason
+        };
+
+        if (user.PassengerProfile != null)
+        {
+            dto.PassengerProfile = new PassengerProfileDto
+            {
+                Id = user.PassengerProfile.Id,
+                UserId = user.PassengerProfile.UserId,
+                University = user.PassengerProfile.University,
+                StudentId = user.PassengerProfile.StudentId,
+                ProgramAndSemester = user.PassengerProfile.ProgramAndSemester,
+                EmergencyContactName = user.PassengerProfile.EmergencyContactName,
+                EmergencyContactPhone = user.PassengerProfile.EmergencyContactPhone
+            };
+        }
+
+        if (user.DriverProfile != null)
+        {
+            dto.DriverProfile = new DriverProfileDto
+            {
+                Id = user.DriverProfile.Id,
+                UserId = user.DriverProfile.UserId,
+                City = user.DriverProfile.City,
+                LicenseNumber = user.DriverProfile.LicenseNumber,
+                VehicleMakeModel = user.DriverProfile.VehicleMakeModel,
+                VehicleColor = user.DriverProfile.VehicleColor,
+                PlateNumber = user.DriverProfile.PlateNumber,
+                VehicleModelYear = user.DriverProfile.VehicleModelYear,
+                SeatsForPassengers = user.DriverProfile.SeatsForPassengers,
+                VehicleRegistrationNumber = user.DriverProfile.VehicleRegistrationNumber,
+                IsOnline = user.DriverProfile.IsOnline,
+                AverageRating = user.DriverProfile.AverageRating
+            };
+        }
+
+        return dto;
+    }
+}

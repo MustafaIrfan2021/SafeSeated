@@ -1,0 +1,246 @@
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using SafeSeated.Application.Dtos.Rides;
+using SafeSeated.Application.Services;
+using SafeSeated.Domain.Entities;
+using SafeSeated.Domain.Enums;
+using SafeSeated.Infrastructure.Data;
+
+namespace SafeSeated.Infrastructure.Services
+{
+    public class RideService : IRideService
+    {
+        private readonly SafeSeatedDbContext _dbContext;
+        private readonly ILogger<RideService> _logger;
+
+        public RideService(SafeSeatedDbContext dbContext, ILogger<RideService> logger)
+        {
+            _dbContext = dbContext;
+            _logger = logger;
+        }
+
+        public async Task<RideDto> CreateRideAsync(Guid driverId, CreateRideDto dto, CancellationToken cancellationToken = default)
+        {
+            // Verify driver is approved
+            var driver = await _dbContext.Users
+                .Include(u => u.DriverProfile)
+                .FirstOrDefaultAsync(u => u.Id == driverId && u.Role == UserRole.Driver, cancellationToken);
+
+            if (driver == null || driver.Status != UserStatus.Approved)
+                throw new InvalidOperationException("Driver must be approved to create rides");
+
+            // Verify departure time is in future
+            if (dto.DepartureTime <= DateTime.UtcNow)
+                throw new InvalidOperationException("Departure time must be in the future");
+
+            // Verify seats don't exceed vehicle capacity
+            if (dto.SeatsOffered > driver.DriverProfile!.SeatsForPassengers)
+                throw new InvalidOperationException($"Cannot offer more than {driver.DriverProfile.SeatsForPassengers} seats");
+
+            var ride = new Ride
+            {
+                Id = Guid.NewGuid(),
+                DriverId = driverId,
+                PickupArea = dto.PickupArea,
+                Destination = dto.Destination,
+                DepartureTime = dto.DepartureTime,
+                PricePerSeat = dto.PricePerSeat,
+                SeatsOffered = dto.SeatsOffered,
+                Status = RideStatus.Active,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _dbContext.Rides.Add(ride);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Ride created: {RideId} by driver {DriverId}", ride.Id, driverId);
+            return MapToRideDto(ride, driver);
+        }
+
+        public async Task<RideDto> GetRideByIdAsync(Guid rideId, CancellationToken cancellationToken = default)
+        {
+            var ride = await _dbContext.Rides
+                .Include(r => r.Driver)
+                .Include(r => r.Driver.DriverProfile)
+                .Include(r => r.Bookings.Where(b => b.Status == BookingStatus.Accepted))
+                .FirstOrDefaultAsync(r => r.Id == rideId, cancellationToken);
+
+            if (ride == null)
+                throw new KeyNotFoundException("Ride not found");
+
+            return MapToRideDto(ride, ride.Driver);
+        }
+
+        public async Task<(List<RideDto> Rides, int TotalCount)> SearchRidesAsync(
+            string pickupArea,
+            string destination,
+            DateTime? departureDate,
+            int page = 1,
+            int pageSize = 10,
+            int seatsNeeded = 1,
+            string sortBy = "DepartureTime",
+            CancellationToken cancellationToken = default)
+        {
+            var query = _dbContext.Rides
+                .Include(r => r.Driver)
+                .Include(r => r.Driver.DriverProfile)
+                .Include(r => r.Bookings.Where(b => b.Status == BookingStatus.Accepted))
+                .Where(r => r.Status == RideStatus.Active &&
+                            r.DepartureTime > DateTime.UtcNow &&
+                            r.Driver.Status == UserStatus.Approved &&
+                            r.Driver.DriverProfile!.IsOnline &&
+                            (string.IsNullOrEmpty(pickupArea) || r.PickupArea.Contains(pickupArea)) &&
+                            (string.IsNullOrEmpty(destination) || r.Destination.Contains(destination)) &&
+                            (departureDate == null || r.DepartureTime.Date == departureDate.Value.Date));
+
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            // Apply sorting
+            query = sortBy?.ToLower() switch
+            {
+                "price" => query.OrderBy(r => r.PricePerSeat),
+                "price_desc" => query.OrderByDescending(r => r.PricePerSeat),
+                _ => query.OrderBy(r => r.DepartureTime)
+            };
+
+            // Filter by seats available
+            var rides = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+            var rideDtos = rides
+                .Where(r => (r.SeatsOffered - r.Bookings.Sum(b => b.SeatsRequested)) >= seatsNeeded)
+                .Select(r => MapToRideDto(r, r.Driver))
+                .ToList();
+
+            return (rideDtos, totalCount);
+        }
+
+        public async Task<List<RideDto>> GetDriverRidesAsync(Guid driverId, CancellationToken cancellationToken = default)
+        {
+            var rides = await _dbContext.Rides
+                .Include(r => r.Driver)
+                .Include(r => r.Driver.DriverProfile)
+                .Include(r => r.Bookings.Where(b => b.Status == BookingStatus.Accepted))
+                .Where(r => r.DriverId == driverId)
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            var driver = rides.FirstOrDefault()?.Driver;
+            if (driver == null)
+                return new List<RideDto>();
+
+            return rides.Select(r => MapToRideDto(r, driver)).ToList();
+        }
+
+        public async Task<RideDto> UpdateRideAsync(Guid rideId, CreateRideDto dto, CancellationToken cancellationToken = default)
+        {
+            var ride = await _dbContext.Rides
+                .Include(r => r.Driver)
+                .Include(r => r.Driver.DriverProfile)
+                .Include(r => r.Bookings)
+                .FirstOrDefaultAsync(r => r.Id == rideId, cancellationToken);
+
+            if (ride == null)
+                throw new KeyNotFoundException("Ride not found");
+
+            if (ride.Status != RideStatus.Active)
+                throw new InvalidOperationException("Only active rides can be updated");
+
+            // Verify new seats don't exceed vehicle capacity
+            if (dto.SeatsOffered > ride.Driver.DriverProfile!.SeatsForPassengers)
+                throw new InvalidOperationException($"Cannot offer more than {ride.Driver.DriverProfile.SeatsForPassengers} seats");
+
+            // Verify seats don't go below current bookings
+            var acceptedSeats = ride.Bookings.Where(b => b.Status == BookingStatus.Accepted).Sum(b => b.SeatsRequested);
+            if (dto.SeatsOffered < acceptedSeats)
+                throw new InvalidOperationException($"Cannot reduce seats below {acceptedSeats} (current bookings)");
+
+            ride.PickupArea = dto.PickupArea;
+            ride.Destination = dto.Destination;
+            ride.DepartureTime = dto.DepartureTime;
+            ride.PricePerSeat = dto.PricePerSeat;
+            ride.SeatsOffered = dto.SeatsOffered;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Ride updated: {RideId}", rideId);
+
+            return MapToRideDto(ride, ride.Driver);
+        }
+
+        public async Task<bool> DeleteRideAsync(Guid rideId, CancellationToken cancellationToken = default)
+        {
+            var ride = await _dbContext.Rides
+                .Include(r => r.Bookings)
+                .FirstOrDefaultAsync(r => r.Id == rideId, cancellationToken);
+
+            if (ride == null)
+                return false;
+
+            if (ride.Bookings.Any(b => b.Status == BookingStatus.Accepted))
+                throw new InvalidOperationException("Cannot delete a ride with accepted bookings");
+
+            ride.Status = RideStatus.Removed;
+            ride.IsDeleted = true;
+
+            // Cancel all pending bookings
+            var pendingBookings = ride.Bookings.Where(b => b.Status == BookingStatus.Pending).ToList();
+            foreach (var booking in pendingBookings)
+                booking.Status = BookingStatus.Cancelled;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Ride deleted: {RideId}", rideId);
+
+            return true;
+        }
+
+        public async Task<bool> CancelRideAsync(Guid rideId, string reason = null, CancellationToken cancellationToken = default)
+        {
+            var ride = await _dbContext.Rides
+                .Include(r => r.Bookings)
+                .FirstOrDefaultAsync(r => r.Id == rideId, cancellationToken);
+
+            if (ride == null)
+                return false;
+
+            ride.Status = RideStatus.Cancelled;
+
+            // Cancel all bookings
+            foreach (var booking in ride.Bookings)
+                booking.Status = BookingStatus.Cancelled;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Ride cancelled: {RideId}", rideId);
+
+            return true;
+        }
+
+        private RideDto MapToRideDto(Ride ride, User driver)
+        {
+            var seatsBooked = ride.Bookings
+                .Where(b => b.Status == BookingStatus.Accepted)
+                .Sum(b => b.SeatsRequested);
+
+            return new RideDto
+            {
+                Id = ride.Id,
+                DriverId = driver.Id,
+                DriverName = driver.FullName,
+                DriverRating = driver.DriverProfile?.AverageRating ?? 0,
+                DriverTotalReviews = 0,
+                VehicleMakeModel = driver.DriverProfile?.VehicleMakeModel ?? "",
+                VehicleColor = driver.DriverProfile?.VehicleColor ?? "",
+                PlateNumber = driver.DriverProfile?.PlateNumber ?? "",
+                PickupArea = ride.PickupArea,
+                Destination = ride.Destination,
+                DepartureTime = ride.DepartureTime,
+                PricePerSeat = ride.PricePerSeat,
+                SeatsOffered = ride.SeatsOffered,
+                SeatsAvailable = ride.SeatsOffered - seatsBooked,
+                Status = ride.Status.ToString(),
+                CreatedAt = ride.CreatedAt
+            };
+        }
+    }
+}

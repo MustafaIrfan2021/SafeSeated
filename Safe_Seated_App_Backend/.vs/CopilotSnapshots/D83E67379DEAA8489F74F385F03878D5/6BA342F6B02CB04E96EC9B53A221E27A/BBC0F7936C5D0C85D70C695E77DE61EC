@@ -1,0 +1,257 @@
+﻿using Microsoft.EntityFrameworkCore;
+using SafeSeated.Application.Dtos.RideRequests;
+using SafeSeated.Domain.Entities;
+using SafeSeated.Domain.Enums;
+using SafeSeated.Infrastructure.Data;
+
+namespace SafeSeated.Application.Services
+{
+    public class RideRequestService : IRideRequestService
+    {
+        private readonly SafeSeatedDbContext _dbContext;
+        private readonly INotificationService _notificationService;
+        private readonly ILogger<RideRequestService> _logger;
+
+        public RideRequestService(
+            SafeSeatedDbContext dbContext,
+            INotificationService notificationService,
+            ILogger<RideRequestService> logger)
+        {
+            _dbContext = dbContext;
+            _notificationService = notificationService;
+            _logger = logger;
+        }
+
+        public async Task<object> CreateRideRequestAsync(
+            Guid passengerId,
+            CreateRideRequestDto dto,
+            CancellationToken cancellationToken = default)
+        {
+            // Verify passenger
+            var passenger = await _dbContext.Users
+                .FirstOrDefaultAsync(u => u.Id == passengerId && u.Role == UserRole.Passenger, cancellationToken);
+
+            if (passenger == null || passenger.Status != UserStatus.Approved)
+                throw new InvalidOperationException("Passenger must be approved to make ride requests");
+
+            // Verify pickup time is in future
+            if (dto.PickupTime <= DateTime.UtcNow)
+                throw new InvalidOperationException("Pickup time must be in the future");
+
+            var rideRequest = new RideRequest
+            {
+                Id = Guid.NewGuid(),
+                PassengerId = passengerId,
+                PickupArea = dto.PickupArea,
+                Destination = dto.Destination,
+                PickupTime = dto.PickupTime,
+                SeatsNeeded = dto.SeatsNeeded,
+                Status = RideRequestStatus.Open,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _dbContext.RideRequests.Add(rideRequest);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Notify all approved, online drivers
+            var approvedDrivers = await _dbContext.Users
+                .Where(u => u.Role == UserRole.Driver && u.Status == UserStatus.Approved)
+                .Select(u => u.Id)
+                .ToListAsync(cancellationToken);
+
+            if (approvedDrivers.Count > 0)
+            {
+                await _notificationService.NotifyMultipleAsync(
+                    approvedDrivers,
+                    "New Ride Request",
+                    $"New ride request: {dto.PickupArea} → {dto.Destination} ({dto.SeatsNeeded} seats needed)",
+                    NotificationType.RideRequestResponse,
+                    rideRequest.Id,
+                    cancellationToken);
+            }
+
+            _logger.LogInformation("Ride request created: {RequestId} by passenger {PassengerId}", rideRequest.Id, passengerId);
+
+            return new
+            {
+                id = rideRequest.Id,
+                status = rideRequest.Status.ToString(),
+                pickupArea = rideRequest.PickupArea,
+                destination = rideRequest.Destination,
+                pickupTime = rideRequest.PickupTime,
+                seatsNeeded = rideRequest.SeatsNeeded,
+                createdAt = rideRequest.CreatedAt
+            };
+        }
+
+        public async Task<List<object>> GetPassengerRideRequestsAsync(
+            Guid passengerId,
+            CancellationToken cancellationToken = default)
+        {
+            var rideRequests = await _dbContext.RideRequests
+                .Where(rr => rr.PassengerId == passengerId)
+                .OrderByDescending(rr => rr.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            return rideRequests.Select(rr => new
+            {
+                rr.Id,
+                rr.PickupArea,
+                rr.Destination,
+                rr.PickupTime,
+                rr.SeatsNeeded,
+                Status = rr.Status.ToString(),
+                rr.CreatedAt
+            }).Cast<object>().ToList();
+        }
+
+        public async Task<bool> CancelRideRequestAsync(
+            Guid requestId,
+            Guid passengerId,
+            CancellationToken cancellationToken = default)
+        {
+            var rideRequest = await _dbContext.RideRequests
+                .FirstOrDefaultAsync(rr => rr.Id == requestId && rr.PassengerId == passengerId, cancellationToken);
+
+            if (rideRequest == null)
+                return false;
+
+            if (rideRequest.Status != RideRequestStatus.Open)
+                throw new InvalidOperationException("Only open ride requests can be cancelled");
+
+            rideRequest.Status = RideRequestStatus.Cancelled;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Ride request cancelled: {RequestId}", requestId);
+            return true;
+        }
+
+        public async Task<List<object>> GetOpenRideRequestsForDriverAsync(
+            Guid driverId,
+            CancellationToken cancellationToken = default)
+        {
+            var rideRequests = await _dbContext.RideRequests
+                .Include(rr => rr.Passenger)
+                .Where(rr => rr.Status == RideRequestStatus.Open && rr.PickupTime > DateTime.UtcNow)
+                .OrderByDescending(rr => rr.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            return rideRequests.Select(rr => new
+            {
+                rr.Id,
+                PassengerName = rr.Passenger.FullName,
+                rr.PickupArea,
+                rr.Destination,
+                rr.PickupTime,
+                rr.SeatsNeeded,
+                Status = rr.Status.ToString(),
+                rr.CreatedAt
+            }).Cast<object>().ToList();
+        }
+
+        public async Task<(bool Success, string Message, object Data)> AcceptRideRequestAsync(
+            Guid requestId,
+            Guid driverId,
+            AcceptRideRequestDto dto,
+            CancellationToken cancellationToken = default)
+        {
+            // Verify driver and get vehicle info
+            var driver = await _dbContext.Users
+                .Include(u => u.DriverProfile)
+                .FirstOrDefaultAsync(u => u.Id == driverId && u.Role == UserRole.Driver, cancellationToken);
+
+            if (driver == null || driver.Status != UserStatus.Approved)
+                throw new InvalidOperationException("Driver must be approved");
+
+            if (dto.SeatsOffered > driver.DriverProfile!.SeatsForPassengers)
+                throw new InvalidOperationException($"Cannot offer more than {driver.DriverProfile.SeatsForPassengers} seats");
+
+            // Get ride request with concurrency control
+            var rideRequest = await _dbContext.RideRequests
+                .Include(rr => rr.Passenger)
+                .FirstOrDefaultAsync(rr => rr.Id == requestId, cancellationToken);
+
+            if (rideRequest == null)
+                throw new KeyNotFoundException("Ride request not found");
+
+            // Use transaction for atomicity
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                // Re-fetch with lock to prevent race condition
+                rideRequest = await _dbContext.RideRequests
+                    .FirstOrDefaultAsync(rr => rr.Id == requestId, cancellationToken);
+
+                if (rideRequest.Status != RideRequestStatus.Open)
+                    throw new InvalidOperationException("This ride request has already been accepted or cancelled");
+
+                // Create ride
+                var ride = new Ride
+                {
+                    Id = Guid.NewGuid(),
+                    DriverId = driverId,
+                    PickupArea = rideRequest.PickupArea,
+                    Destination = rideRequest.Destination,
+                    DepartureTime = rideRequest.PickupTime,
+                    PricePerSeat = dto.PricePerSeat,
+                    SeatsOffered = dto.SeatsOffered,
+                    Status = RideStatus.Active,
+                    SourceRideRequestId = requestId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _dbContext.Rides.Add(ride);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                // Create booking for passenger
+                var booking = new Booking
+                {
+                    Id = Guid.NewGuid(),
+                    RideId = ride.Id,
+                    PassengerId = rideRequest.PassengerId,
+                    SeatsRequested = rideRequest.SeatsNeeded,
+                    PickupTime = rideRequest.PickupTime,
+                    Status = BookingStatus.Accepted,
+                    TravelDate = rideRequest.PickupTime.Date,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _dbContext.Bookings.Add(booking);
+
+                // Mark request as accepted
+                rideRequest.Status = RideRequestStatus.Accepted;
+                rideRequest.AcceptedByDriverId = driverId;
+                rideRequest.CreatedRideId = ride.Id;
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                // Notify passenger
+                await _notificationService.NotifyAsync(
+                    rideRequest.PassengerId,
+                    "Ride Request Accepted",
+                    $"Driver {driver.FullName} accepted your ride request. Your booking is confirmed!",
+                    NotificationType.RideRequestResponse,
+                    ride.Id,
+                    cancellationToken);
+
+                _logger.LogInformation("Ride request accepted: {RequestId} by driver {DriverId}, created ride {RideId}", requestId, driverId, ride.Id);
+
+                return (true, "Ride created and booking accepted", new
+                {
+                    rideId = ride.Id,
+                    bookingId = booking.Id,
+                    status = "Accepted"
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _logger.LogError(ex, "Error accepting ride request {RequestId}", requestId);
+                throw;
+            }
+        }
+    }
+}

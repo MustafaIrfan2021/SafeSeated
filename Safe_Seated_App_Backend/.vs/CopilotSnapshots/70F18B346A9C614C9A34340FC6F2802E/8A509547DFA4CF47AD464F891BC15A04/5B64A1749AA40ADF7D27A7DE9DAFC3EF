@@ -1,0 +1,114 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace SafeSeated.Application.Dtos.Auth;
+
+/// <summary>
+/// Request DTO for user login
+/// </summary>
+public class LoginRequestDto
+{
+    [Required(ErrorMessage = "Email is required")]
+    [EmailAddress(ErrorMessage = "Invalid email format")]
+    public string Email { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Password is required")]
+    public string Password { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string? DeviceInfo { get; set; }
+
+    [StringLength(50)]
+    public string? IpAddress { get; set; }
+}
+
+/// <summary>
+/// Response DTO containing JWT tokens and user info
+/// </summary>
+public class TokenResponseDto
+{
+    [Required]
+    public string AccessToken { get; set; } = string.Empty;
+
+    [Required]
+    public string RefreshToken { get; set; } = string.Empty;
+
+    public int ExpiresIn { get; set; } // seconds
+
+    [Required]
+    public UserTokenDto User { get; set; } = new();
+}
+
+/// <summary>
+/// User info embedded in token response
+/// </summary>
+public class UserTokenDto
+{
+    [Required]
+    public Guid Id { get; set; }
+
+    [Required]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    public string Phone { get; set; } = string.Empty;
+
+    [Required]
+    public string Role { get; set; } = string.Empty;
+
+    [Required]
+    public string Status { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request DTO for token refresh
+/// </summary>
+public class RefreshTokenRequestDto
+{
+    [Required(ErrorMessage = "Refresh token is required")]
+    public string RefreshToken { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string? DeviceInfo { get; set; }
+
+    [StringLength(50)]
+    public string? IpAddress { get; set; }
+}
+
+/// <summary>
+/// Request DTO for password change
+/// </summary>
+public class ChangePasswordRequestDto
+{
+    [Required(ErrorMessage = "Current password is required")]
+    public string CurrentPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "New password is required")]
+    [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters")]
+    public string NewPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Password confirmation is required")]
+    [Compare("NewPassword", ErrorMessage = "Passwords do not match")]
+    public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response DTO for registration status check
+/// </summary>
+public class RegistrationStatusDto
+{
+    [Required]
+    public Guid UserId { get; set; }
+
+    [Required]
+    public string Status { get; set; } = string.Empty; // Pending, Approved, Rejected
+
+    [StringLength(500)]
+    public string? RejectionReason { get; set; }
+
+    public bool IsApproved => Status == "Approved";
+    public bool IsRejected => Status == "Rejected";
+    public bool IsPending => Status == "Pending";
+}
