@@ -193,7 +193,8 @@ class LiveTripScreen extends StatelessWidget {
                         onPressed: () {
                           showDialog(
                             context: context,
-                            builder: (ctx) => const SosDialog(),
+                            barrierDismissible: false,
+                            builder: (ctx) => SosDialog(rideId: ride.id),
                           );
                         },
                       ),

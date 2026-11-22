@@ -63,6 +63,8 @@ abstract class AuthRepository {
     required String vehiclePlate,
     required String vehicleYear,
     required int seatsTotal,
+    required String emergencyContactName,
+    required String emergencyContactPhone,
   });
   Future<List<NotificationItem>> getNotifications(String userEmail);
   Future<void> markNotificationsRead(String userEmail);

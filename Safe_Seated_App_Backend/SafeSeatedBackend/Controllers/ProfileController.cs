@@ -42,8 +42,6 @@ public class ProfileController : ControllerBase
             (nameof(request.StudentId), request.StudentId),
             (nameof(request.Program), request.Program),
             (nameof(request.Semester), request.Semester),
-            (nameof(request.EmergencyContactName), request.EmergencyContactName),
-            (nameof(request.EmergencyContactPhone), request.EmergencyContactPhone),
             (nameof(request.City), request.City),
             (nameof(request.LicenceNumber), request.LicenceNumber),
             (nameof(request.VehicleMake), request.VehicleMake),
@@ -93,6 +91,12 @@ public class ProfileController : ControllerBase
 
         if (user.PassengerProfile != null)
         {
+            if (request.EmergencyContactName != null || request.EmergencyContactPhone != null)
+            {
+                if (string.IsNullOrWhiteSpace(request.EmergencyContactName) ||
+                    string.IsNullOrWhiteSpace(request.EmergencyContactPhone))
+                    return FieldError(nameof(request.EmergencyContactName), "Both emergency contact name and phone are required.");
+            }
             UpdateIfProvided(request.University, value => user.PassengerProfile.University = value);
             UpdateIfProvided(request.StudentId, value => user.PassengerProfile.StudentId = value);
             UpdateIfProvided(request.Program, value => user.PassengerProfile.ProgramAndSemester = value);
@@ -103,6 +107,15 @@ public class ProfileController : ControllerBase
         else if (user.DriverProfile != null)
         {
             var driver = user.DriverProfile;
+            if (request.EmergencyContactName != null || request.EmergencyContactPhone != null)
+            {
+                var nameProvided = !string.IsNullOrWhiteSpace(request.EmergencyContactName);
+                var phoneProvided = !string.IsNullOrWhiteSpace(request.EmergencyContactPhone);
+                if (nameProvided != phoneProvided)
+                    return FieldError(nameof(request.EmergencyContactName), "Provide both emergency contact name and phone, or clear both.");
+                driver.EmergencyContactName = nameProvided ? request.EmergencyContactName!.Trim() : null;
+                driver.EmergencyContactPhone = phoneProvided ? request.EmergencyContactPhone!.Trim() : null;
+            }
             if (request.PlateNumber != null && await _db.DriverProfiles.AnyAsync(
                     profile => profile.UserId != userId && profile.PlateNumber == request.PlateNumber))
                 return FieldError(nameof(request.PlateNumber), "Plate number is already registered.");
@@ -203,7 +216,9 @@ public class ProfileController : ControllerBase
             user.DriverProfile.PlateNumber,
             vehicleYear = user.DriverProfile.VehicleModelYear,
             seatCapacity = user.DriverProfile.SeatCapacity,
-            user.DriverProfile.IsOnline
+            user.DriverProfile.IsOnline,
+            user.DriverProfile.EmergencyContactName,
+            user.DriverProfile.EmergencyContactPhone
         }
     };
 }
@@ -226,9 +241,10 @@ public sealed class ProfilePatchRequest
     public string? StudentId { get; set; }
     public string? Program { get; set; }
     public string? Semester { get; set; }
+    [StringLength(100)]
     public string? EmergencyContactName { get; set; }
 
-    [RegularExpression(@"^03\d{9}$")]
+    [RegularExpression(@"^(03\d{9})?$")]
     public string? EmergencyContactPhone { get; set; }
 
     public string? City { get; set; }

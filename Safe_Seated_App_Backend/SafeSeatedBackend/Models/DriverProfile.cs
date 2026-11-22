@@ -56,6 +56,12 @@ public class DriverProfile : Entity
 
     public double? AverageRating { get; set; }
 
+    [StringLength(100)]
+    public string? EmergencyContactName { get; set; }
+
+    [StringLength(11)]
+    public string? EmergencyContactPhone { get; set; }
+
     // Navigation
     public User User { get; set; } = null!;
 }

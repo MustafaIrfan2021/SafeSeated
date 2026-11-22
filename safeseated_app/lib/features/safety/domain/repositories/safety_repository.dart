@@ -3,11 +3,10 @@ import '../models/complaint.dart';
 
 abstract class SafetyRepository {
   Future<SosIncident> triggerSos({
-    required String reporterEmail,
-    required String reporterName,
-    required String emergencyContactName,
-    required String emergencyContactPhone,
-    String? location,
+    required String clientRequestId,
+    double? latitude,
+    double? longitude,
+    int? rideId,
   });
   Future<List<SosIncident>> getSosIncidents();
   Future<Complaint> submitComplaint({

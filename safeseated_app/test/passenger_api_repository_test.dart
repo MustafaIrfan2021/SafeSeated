@@ -64,6 +64,122 @@ void main() {
     expect(ride!.from, 'Clifton');
   });
 
+  test(
+    'SOS create uses the authenticated API and maps server identity fields',
+    () async {
+      final storage = _MemoryTokenStorage();
+      final client = ApiClient(
+        tokenStorage: storage,
+        baseUrl: 'http://test/api',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/emergency-alerts');
+          expect(request.headers['Authorization'], 'Bearer test-token');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(
+            body['clientRequestId'],
+            'ffffffff-ffff-4fff-8fff-ffffffffffff',
+          );
+          expect(body['latitude'], 24.86);
+          expect(body['longitude'], 67.0);
+          expect(body.containsKey('rideId'), isFalse);
+          return http.Response(
+            jsonEncode({
+              'id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              'role': 'Passenger',
+              'latitude': 24.86,
+              'longitude': 67.0,
+              'rideId': null,
+              'createdAt': '2026-11-21T22:00:00Z',
+              'status': 'Open',
+            }),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final alert = await ApiSafetyRepository(client).triggerSos(
+        clientRequestId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        latitude: 24.86,
+        longitude: 67,
+      );
+
+      expect(alert.role, 'Passenger');
+      expect(alert.latitude, 24.86);
+      expect(alert.longitude, 67);
+      expect(alert.timestamp, DateTime.parse('2026-11-21T22:00:00Z'));
+      expect(alert.status, 'Open');
+    },
+  );
+
+  test('SOS history uses the authenticated current-user endpoint', () async {
+    final client = ApiClient(
+      tokenStorage: _MemoryTokenStorage(),
+      baseUrl: 'http://test/api',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/emergency-alerts/me');
+        expect(request.headers['Authorization'], 'Bearer test-token');
+        return http.Response(
+          jsonEncode([
+            {
+              'id': 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+              'role': 'Driver',
+              'latitude': null,
+              'longitude': null,
+              'rideId': null,
+              'createdAt': '2026-11-21T22:00:00Z',
+              'status': 'Open',
+            },
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final alerts = await ApiSafetyRepository(client).getSosIncidents();
+
+    expect(alerts, hasLength(1));
+    expect(alerts.single.role, 'Driver');
+    expect(alerts.single.latitude, isNull);
+    expect(alerts.single.longitude, isNull);
+  });
+
+  test('SOS request includes the backend ride ID when available', () async {
+    const rideGuid = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    ApiIdMapper.remember(77, rideGuid);
+    final client = ApiClient(
+      tokenStorage: _MemoryTokenStorage(),
+      baseUrl: 'http://test/api',
+      httpClient: MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['rideId'], rideGuid);
+        return http.Response(
+          jsonEncode({
+            'id': 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+            'role': 'Passenger',
+            'latitude': null,
+            'longitude': null,
+            'rideId': rideGuid,
+            'createdAt': '2026-11-21T22:00:00Z',
+            'status': 'Open',
+          }),
+          201,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final alert = await ApiSafetyRepository(client).triggerSos(
+      clientRequestId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+      rideId: 77,
+    );
+
+    expect(alert.rideId, 77);
+  });
+
   test('ride search maps paginated response to Ride models', () async {
     final client = ApiClient(
       tokenStorage: _MemoryTokenStorage(),
@@ -164,6 +280,70 @@ void main() {
   );
 
   test(
+    'ride requests and bookings interpret timezone-free times as Pakistan time',
+    () async {
+      final rideGuid = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+      ApiIdMapper.remember(903, rideGuid);
+      final client = ApiClient(
+        tokenStorage: _MemoryTokenStorage(),
+        baseUrl: 'http://test/api',
+        httpClient: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          if (request.url.path.endsWith('/ride-requests')) {
+            expect(body['requestedTime'], '2026-11-21T22:15:00.000Z');
+            return http.Response(
+              jsonEncode({
+                'id': 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+                'pickup': 'Gulshan',
+                'destination': 'SMIU',
+                'requestedTime': '2026-11-21T22:15:00Z',
+                'seats': 1,
+                'status': 'Open',
+              }),
+              201,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          if (request.url.path.endsWith('/bookings')) {
+            expect(body['pickupTime'], '2026-11-21T22:15:00.000Z');
+            return http.Response(
+              jsonEncode({
+                'id': 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+                'rideId': rideGuid,
+                'seats': 1,
+                'fareTotal': 350,
+                'pickupTime': '2026-11-21T22:15:00Z',
+                'departureTime': '2026-11-21T22:00:00Z',
+                'status': 'Pending',
+              }),
+              201,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('{}', 404);
+        }),
+      );
+
+      await ApiRideRepository(client).createPassengerRideRequest(
+        passengerEmail: 'passenger@example.com',
+        passengerName: 'Passenger',
+        pickup: 'Gulshan',
+        destination: 'SMIU',
+        time: '2026-11-22 03:15',
+        seats: 1,
+      );
+      await ApiBookingRepository(client).createBooking(
+        rideId: 903,
+        passengerEmail: 'passenger@example.com',
+        passengerName: 'Passenger',
+        seats: 1,
+        pickupTime: '2026-11-22 03:15',
+        totalFare: 350,
+      );
+    },
+  );
+
+  test(
     'ride request cancellation and complaint creation use backend routes',
     () async {
       var sawCancel = false;
@@ -234,6 +414,7 @@ void main() {
           expect(body['pickup'], 'Gulshan');
           expect(body['destination'], 'SMIU');
           expect(body['totalSeats'], 3);
+          expect(body['departureTime'], '2026-11-20T03:00:00.000Z');
           return http.Response(
             jsonEncode({
               'id': '55555555-5555-5555-5555-555555555555',
@@ -282,6 +463,61 @@ void main() {
     expect(ride.from, 'Gulshan');
     expect(sawRideCreate, isTrue);
     expect(sawAvailability, isTrue);
+  });
+
+  test('ride create and update serialize Pakistan time as UTC', () async {
+    final rideGuid = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    ApiIdMapper.remember(902, rideGuid);
+
+    for (final date in [DateTime(2026, 11, 22), DateTime.utc(2026, 11, 22)]) {
+      final client = ApiClient(
+        tokenStorage: _MemoryTokenStorage(),
+        baseUrl: 'http://test/api',
+        httpClient: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['departureTime'], '2026-11-21T22:00:00.000Z');
+          return http.Response(
+            jsonEncode({
+              'id': rideGuid,
+              'pickup': 'Gulshan',
+              'destination': 'SMIU',
+              'departureTime': '2026-11-21T22:00:00Z',
+              'farePerSeat': 350,
+              'totalSeats': 3,
+              'seatsAvailable': 3,
+              'status': 'Active',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      final repository = ApiRideRepository(client);
+
+      await repository.publishDriverRide(
+        driverEmail: 'sana@example.com',
+        driverName: 'Sana Malik',
+        from: 'Gulshan',
+        to: 'SMIU',
+        departureAt: date,
+        departureTime: '3:00 AM',
+        farePerSeat: 350,
+        seatsTotal: 3,
+        vehicleInfo: 'Suzuki',
+        vehiclePlate: 'BCA-412',
+      );
+      await repository.updateDriverRide(
+        rideId: 902,
+        driverEmail: 'sana@example.com',
+        from: 'Gulshan',
+        to: 'SMIU',
+        departureAt: date,
+        departureTime: '3:00 AM',
+        farePerSeat: 350,
+        seatsTotal: 3,
+        notes: '',
+      );
+    }
   });
 
   test(

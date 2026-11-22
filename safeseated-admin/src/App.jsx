@@ -10,11 +10,11 @@ import Settings from './pages/Settings.jsx';
 import Log from './pages/Log.jsx';
 
 const TABS = [['dashboard', 'Dashboard', 'dashboard'], ['drivers', 'Drivers', 'drivers'], ['passengers', 'Passengers', 'passengers'], ['rides', 'Rides & bookings', 'rides'],
-  ['payments', 'Payments & fees', 'payments'], ['safety', 'Complaints & SOS', 'safety'], ['settings', 'Settings', 'settings'], ['log', 'Activity log', 'log']];
+  ['payments', 'Payments & fees', 'payments'], ['safety', 'Emergency SOS', 'safety'], ['settings', 'Settings', 'settings'], ['log', 'Activity log', 'log']];
 
 export default function App() {
   const [user, setUser] = useState(() => api.restoreSession()), [tab, setTab] = useState('dashboard'), [err, setErr] = useState(''), [show, setShow] = useState(false), [busy, setBusy] = useState(false);
-  const demoTabs = new Set(['dashboard', 'rides', 'payments', 'safety', 'settings', 'log']);
+  const demoTabs = new Set(['dashboard', 'rides', 'payments', 'settings', 'log']);
 
   useEffect(() => {
     const handleLogout = () => setUser(null);

@@ -3,7 +3,6 @@ import '../domain/models/complaint.dart';
 import '../domain/repositories/safety_repository.dart';
 
 class MockSafetyRepository implements SafetyRepository {
-  final List<SosIncident> _sosIncidents = [];
   final List<Complaint> _complaints = [
     Complaint(
       id: 'CMP-101',
@@ -21,31 +20,17 @@ class MockSafetyRepository implements SafetyRepository {
 
   @override
   Future<SosIncident> triggerSos({
-    required String reporterEmail,
-    required String reporterName,
-    required String emergencyContactName,
-    required String emergencyContactPhone,
-    String? location,
+    required String clientRequestId,
+    double? latitude,
+    double? longitude,
+    int? rideId,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    final incident = SosIncident(
-      id: 'SOS-${DateTime.now().millisecondsSinceEpoch}',
-      reporterEmail: reporterEmail,
-      reporterName: reporterName,
-      emergencyContactName: emergencyContactName,
-      emergencyContactPhone: emergencyContactPhone,
-      timestamp: DateTime.now(),
-      status: 'active',
-      location:
-          location ?? 'Karachi (Simulated location near Shahrah-e-Faisal)',
-    );
-    _sosIncidents.insert(0, incident);
-    return incident;
+    throw UnimplementedError('SOS alerts require the authenticated backend.');
   }
 
   @override
   Future<List<SosIncident>> getSosIncidents() async {
-    return _sosIncidents;
+    throw UnimplementedError('SOS alerts require the authenticated backend.');
   }
 
   @override

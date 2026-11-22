@@ -93,11 +93,8 @@ class ApiClient {
     late final http.StreamedResponse streamed;
     try {
       streamed = await _httpClient.send(request);
-    } on http.ClientException {
-      throw const ApiException(
-        message:
-            'Could not connect to the SafeSeated API. Check that the backend is running.',
-      );
+    } on http.ClientException catch (error) {
+      throw _connectionError(error);
     }
     final response = await http.Response.fromStream(streamed);
     final decoded = _decodeResponse(response);
@@ -143,11 +140,8 @@ class ApiClient {
       response = await http.Response.fromStream(
         await _httpClient.send(request),
       );
-    } on http.ClientException {
-      throw const ApiException(
-        message:
-            'Could not connect to the SafeSeated API. Check that the backend is running.',
-      );
+    } on http.ClientException catch (error) {
+      throw _connectionError(error);
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -194,11 +188,8 @@ class ApiClient {
       response = await http.Response.fromStream(
         await _httpClient.send(request),
       );
-    } on http.ClientException {
-      throw const ApiException(
-        message:
-            'Could not connect to the SafeSeated API. Check that the backend is running.',
-      );
+    } on http.ClientException catch (error) {
+      throw _connectionError(error);
     }
 
     final decoded = _decodeResponse(response);
@@ -247,6 +238,7 @@ class ApiClient {
               .map((item) => item.toString())
               .toList();
         }
+
       }
     }
 
@@ -261,6 +253,15 @@ class ApiClient {
           ? 'The request failed with status $statusCode.'
           : message,
       fieldErrors: fieldErrors,
+    );
+  }
+
+  ApiException _connectionError(http.ClientException error) {
+    const message =
+        'Could not connect to the SafeSeated API. Check that the backend is running.';
+    final details = error.message.trim();
+    return ApiException(
+      message: details.isEmpty ? message : '$message Details: $details',
     );
   }
 }

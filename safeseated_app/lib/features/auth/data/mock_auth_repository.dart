@@ -376,6 +376,8 @@ class MockAuthRepository implements AuthRepository {
     required String vehiclePlate,
     required String vehicleYear,
     required int seatsTotal,
+    required String emergencyContactName,
+    required String emergencyContactPhone,
   }) async {
     await Future.delayed(const Duration(milliseconds: 200));
     final current = _currentUser;
@@ -413,6 +415,8 @@ class MockAuthRepository implements AuthRepository {
       vehiclePlate: vehiclePlate.trim(),
       vehicleYear: vehicleYear.trim(),
       seatsTotal: seatsTotal,
+      emergencyContactName: emergencyContactName.trim(),
+      emergencyContactPhone: emergencyContactPhone.trim(),
     );
     final verificationDetailsChanged =
         current.licenseNumber != updated.licenseNumber ||

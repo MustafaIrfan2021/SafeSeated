@@ -8,12 +8,12 @@ export default function Dashboard({ go }) {
   const drivers = useCol('drivers'), pass = useCol('passengers'), bookings = useCol('bookings');
   const pay = useCol('payments'), inc = useCol('incidents'), log = useCol('log');
   const generated = sum(pay, p => p.fee), collected = sum(pay.filter(p => p.status === 'Confirmed'), p => p.fee);
-  const open = inc.filter(i => i.status === 'Open'), sos = open.filter(i => i.type === 'SOS');
+  const open = inc.filter(i => i.status === 'Open');
   const todo = [
     ['Driver applications to review', drivers.filter(d => review(d.status)).length, 'drivers', 'driver applications'],
     ['Passenger verifications', pass.filter(p => review(p.status)).length, 'passengers', 'passenger checks'],
     ['Fee payments to confirm', pay.filter(p => p.status === 'Pending Admin Confirmation').length, 'payments', 'payments to confirm'],
-    ['Open complaints, disputes and SOS', open.length, 'safety', 'open cases'],
+    ['Open demo cases', open.length, 'safety', 'demo cases'],
   ];
   const total = todo.reduce((s, t) => s + t[1], 0);
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -24,8 +24,6 @@ export default function Dashboard({ go }) {
       <p>{total ? total + ' items need your attention today.' : 'Everything is up to date.'}</p>
       <div className="chips">{todo.filter(t => t[1] > 0).map(([, n, k, s]) => <button key={k} className="chip" onClick={() => go(k)}><b>{n}</b> {s}</button>)}</div>
     </div>
-    {sos.length > 0 && <div className="alert"><Icon name="alert" /> <span>{sos.length} open SOS alert{sos.length > 1 ? 's' : ''} need a response.</span>
-      <button onClick={() => go('safety')}>Open now</button></div>}
     <h2>Platform</h2>
     <div className="grid">
       <Stat icon="passengers" n={pass.length} l="Passengers" /><Stat icon="drivers" n={drivers.length} l="Drivers" />

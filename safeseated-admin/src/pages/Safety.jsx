@@ -1,26 +1,71 @@
+import { useEffect, useState } from 'react';
 import { api } from '../api';
-import useCol from '../useCol';
-import { Tag, Head, Table } from '../ui';
+import { Head, Table, Tag } from '../ui';
+
+function formatTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Unknown' : date.toLocaleString();
+}
+
+function emergencyContact(alert) {
+  const contact = alert.user?.emergencyContactPhone;
+  return contact
+    ? <a href={`tel:${contact}`}>{alert.user.emergencyContactName || 'Emergency contact'} · {contact}</a>
+    : 'Not configured';
+}
+
+function alertLocation(alert) {
+  if (!Number.isFinite(alert.latitude) || !Number.isFinite(alert.longitude)) {
+    return 'Unavailable';
+  }
+  const url = `https://www.google.com/maps/search/?api=1&query=${alert.latitude},${alert.longitude}`;
+  return <a href={url} target="_blank" rel="noreferrer">View map</a>;
+}
 
 export default function Safety() {
-  const inc = useCol('incidents'), drivers = useCol('drivers');
-  const who = id => drivers.find(d => d.id === id)?.name || '-';
-  const sorted = [...inc].sort((a, b) => (b.status === 'Open') - (a.status === 'Open') || (b.type === 'SOS') - (a.type === 'SOS'));
+  const [alerts, setAlerts] = useState([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [reload, setReload] = useState(0);
 
-  async function resolve(i) {
-    const note = prompt('Resolution note', 'Warning issued to driver'); if (!note) return;
-    await api.update('incidents', i.id, { status: 'Resolved', note }); api.log('Incident resolved', i.id, note);
-  }
-  async function suspend(i) {
-    if (!confirm('Suspend ' + who(i.driverId) + '?')) return;
-    await api.update('drivers', i.driverId, { status: 'Suspended', note: 'Suspended after ' + i.id });
-    api.log('Driver suspended', i.driverId, 'Incident ' + i.id);
-  }
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    api.emergencyAlerts()
+      .then(items => {
+        if (!Array.isArray(items)) throw new Error('The API returned an invalid SOS alert list.');
+        if (active) setAlerts(items);
+      })
+      .catch(cause => {
+        if (active) setError(cause.message || 'Could not load SOS alerts.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [reload]);
+
+  const rows = alerts.map(alert => [
+    formatTime(alert.createdAt),
+    <>{alert.user?.name || 'Unknown user'}<small><br />{alert.role || alert.user?.role || 'Unknown role'} · {alert.user?.phone || 'No phone'}</small></>,
+    emergencyContact(alert),
+    alert.ride
+      ? <>{alert.ride.pickup} → {alert.ride.destination}<small><br />{alert.ride.status} · {formatTime(alert.ride.departureTime)}</small></>
+      : 'Not linked to a ride',
+    alertLocation(alert),
+    <Tag s={alert.status || 'Open'} />,
+  ]);
+
   return (<>
-    <Head title="Complaints, disputes & SOS" sub="Open cases appear first. SOS alerts are always at the top." />
-    <div className="note">Production note: a real SOS flow needs a named response owner, an escalation policy, location-sharing consent and end-to-end testing. This screen only lists and tracks the cases.</div>
-    <Table head={['Case', 'Type', 'Details', 'Driver', 'Reported by', 'Status', '']}
-      rows={sorted.map(i => [i.id, <Tag s={i.type === 'SOS' ? 'SOS' : i.type} />, <>{i.text}{i.note && <small><br />{i.note}</small>}</>, who(i.driverId), i.reporter, <Tag s={i.status} />,
-        i.status === 'Open' && <><button onClick={() => resolve(i)}>Resolve</button><button className="no" onClick={() => suspend(i)}>Suspend driver</button></>])} />
+    <Head title="Emergency SOS alerts" sub="Recent alerts sent by authenticated Passenger and Driver accounts." />
+    <div className="note">SOS alerts are stored for Admin review. The system does not automatically contact emergency services or dispatch a response team.</div>
+    {loading && <p className="emp">Loading SOS alerts…</p>}
+    {error && <div className="note" role="alert">{error}<button className="alt" onClick={() => setReload(value => value + 1)}>Retry</button></div>}
+    {!loading && !error && alerts.length === 0 && <p className="emp">No SOS alerts have been received.</p>}
+    {!loading && !error && alerts.length > 0 && (
+      <Table head={['Received', 'User', 'Emergency contact', 'Ride', 'Location', 'Status']} rows={rows} />
+    )}
+    <button className="alt" onClick={() => setReload(value => value + 1)} disabled={loading}>Refresh alerts</button>
   </>);
 }

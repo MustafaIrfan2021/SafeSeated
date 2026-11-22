@@ -1,21 +1,19 @@
 class SosIncident {
   final String id;
-  final String reporterEmail;
-  final String reporterName;
-  final String emergencyContactName;
-  final String emergencyContactPhone;
+  final String role;
   final DateTime timestamp;
   final String status;
-  final String? location;
+  final double? latitude;
+  final double? longitude;
+  final int? rideId;
 
   const SosIncident({
     required this.id,
-    required this.reporterEmail,
-    required this.reporterName,
-    required this.emergencyContactName,
-    required this.emergencyContactPhone,
+    required this.role,
     required this.timestamp,
-    this.status = 'active',
-    this.location,
+    required this.status,
+    this.latitude,
+    this.longitude,
+    this.rideId,
   });
 }

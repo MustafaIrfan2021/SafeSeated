@@ -10,11 +10,13 @@ class User {
   final UserRole role;
   final VerificationStatus status;
 
-  // Passenger Specific fields
+  // Passenger specific fields
   final String? cnic;
   final String? university;
   final String? studentId;
   final String? programSemester;
+
+  // Emergency contact shared by both account roles
   final String? emergencyContactName;
   final String? emergencyContactPhone;
 

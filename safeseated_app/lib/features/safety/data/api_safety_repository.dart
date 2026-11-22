@@ -63,12 +63,57 @@ class ApiSafetyRepository implements SafetyRepository {
 
   @override
   Future<SosIncident> triggerSos({
-    required String reporterEmail,
-    required String reporterName,
-    required String emergencyContactName,
-    required String emergencyContactPhone,
-    String? location,
-  }) => throw UnimplementedError();
+    required String clientRequestId,
+    double? latitude,
+    double? longitude,
+    int? rideId,
+  }) async {
+    final rideGuid = rideId == null ? null : ApiIdMapper.toGuid(rideId);
+    if (rideId != null && rideGuid == null) {
+      throw StateError('The selected ride is missing its backend ID.');
+    }
+    final data = await _api.postJson('/emergency-alerts', {
+      'clientRequestId': clientRequestId,
+      'latitude': latitude,
+      'longitude': longitude,
+      'rideId': ?rideGuid,
+    });
+    return _sosIncidentFromJson(data);
+  }
+
   @override
-  Future<List<SosIncident>> getSosIncidents() => throw UnimplementedError();
+  Future<List<SosIncident>> getSosIncidents() async {
+    final items = await _api.getJsonList('/emergency-alerts/me');
+    return items.map((item) {
+      if (item is! Map) {
+        throw const FormatException('The API returned an invalid SOS alert.');
+      }
+      return _sosIncidentFromJson(
+        item.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    }).toList();
+  }
+
+  SosIncident _sosIncidentFromJson(Map<String, dynamic> json) {
+    final rideGuid = json['rideId']?.toString();
+    if (rideGuid != null) {
+      ApiIdMapper.remember(ApiIdMapper.toInt(rideGuid), rideGuid);
+    }
+    final id = json['id']?.toString();
+    final role = json['role']?.toString();
+    final status = json['status']?.toString();
+    final timestamp = DateTime.tryParse(json['createdAt']?.toString() ?? '');
+    if (id == null || role == null || status == null || timestamp == null) {
+      throw const FormatException('The API returned an invalid SOS alert.');
+    }
+    return SosIncident(
+      id: id,
+      role: role,
+      timestamp: timestamp,
+      status: status,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      rideId: rideGuid == null ? null : ApiIdMapper.toInt(rideGuid),
+    );
+  }
 }

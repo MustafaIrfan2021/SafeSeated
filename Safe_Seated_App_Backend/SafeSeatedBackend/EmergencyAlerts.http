@@ -1,0 +1,34 @@
+@baseUrl = http://localhost:5157
+@passengerToken = replace-with-a-passenger-token
+@adminToken = replace-with-an-admin-token
+@requestId = 85e08a4d-bb80-40db-97d9-cb33a8d7aa41
+
+### Create an SOS alert (rideId is optional)
+POST {{baseUrl}}/api/emergency-alerts
+Authorization: Bearer {{passengerToken}}
+Content-Type: application/json
+
+{
+  "clientRequestId": "{{requestId}}",
+  "latitude": 24.8607,
+  "longitude": 67.0011
+}
+
+### Invalid coordinates are rejected with 400
+POST {{baseUrl}}/api/emergency-alerts
+Authorization: Bearer {{passengerToken}}
+Content-Type: application/json
+
+{
+  "clientRequestId": "c0fee5a1-d905-4db4-b324-1190f8b4e1b5",
+  "latitude": 91,
+  "longitude": 181
+}
+
+### Read the authenticated user's SOS history
+GET {{baseUrl}}/api/emergency-alerts/me
+Authorization: Bearer {{passengerToken}}
+
+### Read SOS alerts as Admin
+GET {{baseUrl}}/api/admin/emergency-alerts
+Authorization: Bearer {{adminToken}}

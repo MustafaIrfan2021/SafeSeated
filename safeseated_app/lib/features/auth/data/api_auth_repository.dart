@@ -171,9 +171,13 @@ class ApiAuthRepository implements AuthRepository {
           : null,
       emergencyContactName: passenger is Map
           ? passenger['emergencyContactName']?.toString()
+          : driver is Map
+          ? driver['emergencyContactName']?.toString()
           : null,
       emergencyContactPhone: passenger is Map
           ? passenger['emergencyContactPhone']?.toString()
+          : driver is Map
+          ? driver['emergencyContactPhone']?.toString()
           : null,
       city: driver is Map ? driver['city']?.toString() : null,
       licenseNumber: driver is Map ? driver['licenceNumber']?.toString() : null,
@@ -281,6 +285,8 @@ class ApiAuthRepository implements AuthRepository {
     required String vehiclePlate,
     required String vehicleYear,
     required int seatsTotal,
+    required String emergencyContactName,
+    required String emergencyContactPhone,
   }) async {
     await _api.patchJson('/me', {
       'name': name.trim(),
@@ -292,6 +298,10 @@ class ApiAuthRepository implements AuthRepository {
       'plateNumber': vehiclePlate.trim(),
       'vehicleYear': int.tryParse(vehicleYear),
       'seatCapacity': seatsTotal,
+      'emergencyContactName': emergencyContactName.trim(),
+      'emergencyContactPhone': emergencyContactPhone.trim().isEmpty
+          ? ''
+          : _normalizePakistanPhone(emergencyContactPhone),
     });
     return _fetchProfile();
   }

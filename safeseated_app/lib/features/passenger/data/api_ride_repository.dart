@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_id_mapper.dart';
+import '../../../core/utils/pakistan_time.dart';
 import '../domain/models/ride.dart';
 import '../domain/models/ride_request.dart';
 import '../domain/repositories/ride_repository.dart';
@@ -76,7 +77,7 @@ class ApiRideRepository implements RideRepository {
     required String time,
     required int seats,
   }) async {
-    final requestedTime = _parseTime(time);
+    final requestedTime = PakistanTime.parseInput(time);
     if (requestedTime == null) {
       throw ArgumentError(
         'Enter a valid pickup date and time, for example 2026-11-20 08:15.',
@@ -85,7 +86,7 @@ class ApiRideRepository implements RideRepository {
     final response = await _api.postJson('/ride-requests', {
       'pickup': pickup.trim(),
       'destination': destination.trim(),
-      'requestedTime': requestedTime.toUtc().toIso8601String(),
+      'requestedTime': requestedTime.toIso8601String(),
       'seats': seats,
     });
     return _rideRequestFromJson(response);
@@ -106,8 +107,9 @@ class ApiRideRepository implements RideRepository {
     if (guid != null) ApiIdMapper.remember(id, guid);
 
     final departure =
-        DateTime.tryParse(json['departureTime']?.toString() ?? '') ??
-        DateTime.now();
+        PakistanTime.parseUtc(json['departureTime']?.toString()) ??
+        DateTime.now().toUtc();
+    final pakistanDeparture = PakistanTime.toPakistan(departure);
     final totalSeats = _intValue(json['totalSeats'] ?? json['seatsOffered'], 1);
     final seatsAvailable = _intValue(json['seatsAvailable'], totalSeats);
     final fare = _numValue(
@@ -122,7 +124,7 @@ class ApiRideRepository implements RideRepository {
       from: json['pickup']?.toString() ?? json['pickupArea']?.toString() ?? '',
       to: json['destination']?.toString() ?? '',
       departureAt: departure,
-      departureTime: DateFormat('h:mm a').format(departure.toLocal()),
+      departureTime: DateFormat('h:mm a').format(pakistanDeparture),
       farePerSeat: fare,
       seatsTotal: totalSeats,
       seatsBooked: (totalSeats - seatsAvailable).clamp(0, totalSeats),
@@ -149,8 +151,9 @@ class ApiRideRepository implements RideRepository {
         ? PassengerRideRequestStatus.cancelled
         : PassengerRideRequestStatus.open;
     final time =
-        DateTime.tryParse(json['requestedTime']?.toString() ?? '') ??
-        DateTime.now();
+        PakistanTime.parseUtc(json['requestedTime']?.toString()) ??
+        DateTime.now().toUtc();
+    final pakistanTime = PakistanTime.toPakistan(time);
 
     return PassengerRideRequest(
       id: id,
@@ -158,27 +161,9 @@ class ApiRideRepository implements RideRepository {
       passengerName: json['passengerName']?.toString() ?? '',
       pickup: json['pickup']?.toString() ?? '',
       destination: json['destination']?.toString() ?? '',
-      time: DateFormat('h:mm a').format(time.toLocal()),
+      time: DateFormat('h:mm a').format(pakistanTime),
       seats: _intValue(json['seats'], 1),
       status: status,
-    );
-  }
-
-  DateTime? _parseTime(String value) {
-    final iso = DateTime.tryParse(value);
-    if (iso != null) return iso;
-    final match = RegExp(
-      r'^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})',
-    ).firstMatch(value);
-    if (match == null) return null;
-    final date = DateTime.tryParse(match.group(1)!);
-    if (date == null) return null;
-    return DateTime(
-      date.year,
-      date.month,
-      date.day,
-      int.parse(match.group(2)!),
-      int.parse(match.group(3)!),
     );
   }
 
@@ -203,7 +188,9 @@ class ApiRideRepository implements RideRepository {
       if (suffix == 'PM' && hour < 12) hour += 12;
       if (suffix == 'AM' && hour == 12) hour = 0;
     }
-    return DateTime(date.year, date.month, date.day, hour, minute);
+    return PakistanTime.fromPakistanWallClock(
+      DateTime.utc(date.year, date.month, date.day, hour, minute),
+    );
   }
 
   @override

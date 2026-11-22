@@ -87,6 +87,8 @@ void main() {
           vehiclePlate: 'BCA-999',
           vehicleYear: '2022',
           seatsTotal: 3,
+          emergencyContactName: '',
+          emergencyContactPhone: '',
         );
 
         expect(updated.status, VerificationStatus.pending);

@@ -49,7 +49,6 @@ const data = {
     { id: 'T5', driverId: 'D7', bookingId: 'B5', fare: 300, fee: 60, status: 'Due', method: '', ref: '', date: '24 Oct', reason: '' },
   ],
   incidents: [
-    { id: 'S2', type: 'SOS', text: 'Passenger SOS alert (reported live)', driverId: 'D1', reporter: 'P5', status: 'Open', note: '' },
     { id: 'C1', type: 'Complaint', text: 'Rude behaviour', driverId: 'D3', reporter: 'P4', status: 'Open', note: '' },
     { id: 'C3', type: 'Complaint', text: 'Wrong route taken', driverId: 'D1', reporter: 'P4', status: 'Open', note: '' },
     { id: 'C4', type: 'Dispute', text: 'Driver asked to change the drop-off point', driverId: 'D8', reporter: 'P3', status: 'Open', note: '' },
@@ -164,6 +163,9 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
+  },
+  async emergencyAlerts() {
+    return request('/admin/emergency-alerts');
   },
   list: name => data[name],                  // GET /drivers /passengers /routes /bookings /payments /incidents /log
   async update(name, id, patch) {            // PATCH /<name>/:id

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/providers/app_providers.dart';
+import '../../../../core/utils/pakistan_time.dart';
 import '../../../auth/domain/models/user.dart';
 import '../../../passenger/domain/models/ride.dart';
 
@@ -100,7 +101,9 @@ class _RideCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text('${_dateLabel(ride.departureAt)} · ${ride.departureTime}'),
+          Text(
+            '${_dateLabel(PakistanTime.toPakistan(ride.departureAt))} · ${ride.departureTime}',
+          ),
           Text(
             'PKR ${ride.farePerSeat} / seat · ${ride.seatsAvailable} of ${ride.seatsTotal} available',
           ),
@@ -281,7 +284,9 @@ class _DriverRideFormState extends ConsumerState<DriverRideForm> {
       text: (widget.ride?.seatsTotal ?? widget.user.seatsTotal).toString(),
     );
     _notes = TextEditingController(text: widget.ride?.notes ?? '');
-    final departure = widget.ride?.departureAt ?? DateTime.now();
+    final departure = PakistanTime.toPakistan(
+      widget.ride?.departureAt ?? DateTime.now().toUtc(),
+    );
     _date = DateTime(departure.year, departure.month, departure.day);
     _time = _parseTime(widget.ride?.departureTime);
   }

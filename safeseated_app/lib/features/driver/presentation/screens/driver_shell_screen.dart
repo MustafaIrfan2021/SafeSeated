@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import '../../../safety/presentation/screens/sos_dialog.dart';
 import 'driver_dashboard_screen.dart';
 import 'driver_profile_screen.dart';
 import 'driver_rides_screen.dart';
@@ -35,6 +36,17 @@ class _DriverShellScreenState extends State<DriverShellScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _screens),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFFC62828),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.warning_amber_rounded),
+        label: const Text('SOS'),
+        onPressed: () => showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const SosDialog(),
+        ),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         type: BottomNavigationBarType.fixed,

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/utils/pakistan_time.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/providers/app_providers.dart';
@@ -695,7 +696,7 @@ class _PassengerHomeScreenState extends ConsumerState<PassengerHomeScreen> {
             children: [
               Expanded(
                 child: Text(
-                  '${DateFormat('EEE, d MMM').format(ride.departureAt)} · ${ride.departureTime} · ${ride.vehicleInfo}',
+                  '${DateFormat('EEE, d MMM').format(PakistanTime.toPakistan(ride.departureAt))} · ${ride.departureTime} · ${ride.vehicleInfo}',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

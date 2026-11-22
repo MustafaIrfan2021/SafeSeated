@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../../core/widgets/app_button.dart';
@@ -87,10 +88,32 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
     }
   }
 
+  Future<void> _callPhone(String phone) async {
+    try {
+      final launched = await launchUrl(
+        Uri(scheme: 'tel', path: phone),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) throw StateError('No phone app could place this call.');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start the call: $error')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).value;
-    final ecName = user?.emergencyContactName ?? 'Fatima Khan (Mother)';
+    final ecName = user?.emergencyContactName;
+    final ecPhone = user?.emergencyContactPhone;
+    final hasEmergencyContact =
+        ecName != null &&
+        ecName.trim().isNotEmpty &&
+        ecPhone != null &&
+        ecPhone.trim().isNotEmpty;
     final ridesAsync = ref.watch(allAvailableRidesProvider);
     final complaintsAsync = ref.watch(
       passengerComplaintsProvider(user?.email ?? ''),
@@ -115,6 +138,7 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
                   onTap: () {
                     showDialog(
                       context: context,
+                      barrierDismissible: false,
                       builder: (ctx) => const SosDialog(),
                     );
                   },
@@ -155,7 +179,7 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
                               ),
                               SizedBox(height: 2),
                               Text(
-                                'Preview only · no alerts are sent',
+                                'Send your location to SafeSeated Admin',
                                 style: TextStyle(
                                   color: Color(0xFFFFEBEE),
                                   fontSize: 12,
@@ -218,7 +242,9 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.phone_outlined, size: 16),
                             label: Text(
-                              'Call $ecName',
+                              hasEmergencyContact
+                                  ? 'Call $ecName'
+                                  : 'Set emergency contact',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 12),
@@ -226,15 +252,9 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 10),
                             ),
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Calling is not connected. Contact $ecName at the saved number directly.',
-                                  ),
-                                ),
-                              );
-                            },
+                            onPressed: hasEmergencyContact
+                                ? () => _callPhone(ecPhone)
+                                : null,
                           ),
                         ),
                       ],
@@ -546,23 +566,19 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
           service,
           style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-          decoration: BoxDecoration(
-            color: isHighlight
+        TextButton.icon(
+          onPressed: () => _callPhone(number),
+          icon: const Icon(Icons.call_outlined, size: 16),
+          label: Text(number),
+          style: TextButton.styleFrom(
+            foregroundColor: isHighlight
+                ? AppColors.primary
+                : AppColors.textPrimary,
+            backgroundColor: isHighlight
                 ? AppColors.accentLavender
                 : AppColors.surfaceSubtle,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
+            side: BorderSide(
               color: isHighlight ? AppColors.primary : AppColors.border,
-            ),
-          ),
-          child: Text(
-            number,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: isHighlight ? AppColors.primary : AppColors.textPrimary,
             ),
           ),
         ),

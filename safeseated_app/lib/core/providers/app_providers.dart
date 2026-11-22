@@ -244,6 +244,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     required String vehiclePlate,
     required String vehicleYear,
     required int seatsTotal,
+    required String emergencyContactName,
+    required String emergencyContactPhone,
   }) async {
     final user = await _repo.updateDriverProfile(
       name: name,
@@ -256,6 +258,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       vehiclePlate: vehiclePlate,
       vehicleYear: vehicleYear,
       seatsTotal: seatsTotal,
+      emergencyContactName: emergencyContactName,
+      emergencyContactPhone: emergencyContactPhone,
     );
     state = AsyncValue.data(user);
   }

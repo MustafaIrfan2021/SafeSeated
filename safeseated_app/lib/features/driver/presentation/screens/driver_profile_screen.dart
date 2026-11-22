@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/providers/app_providers.dart';
+import '../../../../core/validation/form_validators.dart';
 import '../../../../core/widgets/avatar_widget.dart';
 import '../../../../core/widgets/status_pill.dart';
 import '../../../auth/domain/models/user.dart';
@@ -206,6 +207,12 @@ class _DriverProfileEditorState extends ConsumerState<_DriverProfileEditor> {
     'plate': TextEditingController(text: widget.user.vehiclePlate ?? ''),
     'year': TextEditingController(text: widget.user.vehicleYear ?? ''),
     'seats': TextEditingController(text: widget.user.seatsTotal.toString()),
+    'emergencyContactName': TextEditingController(
+      text: widget.user.emergencyContactName ?? '',
+    ),
+    'emergencyContactPhone': TextEditingController(
+      text: widget.user.emergencyContactPhone ?? '',
+    ),
   };
   bool _saving = false;
 
@@ -231,6 +238,8 @@ class _DriverProfileEditorState extends ConsumerState<_DriverProfileEditor> {
                   controller: entry.value,
                   keyboardType: entry.key == 'seats'
                       ? TextInputType.number
+                      : entry.key == 'emergencyContactPhone'
+                      ? TextInputType.phone
                       : TextInputType.text,
                   decoration: InputDecoration(labelText: _label(entry.key)),
                 ),
@@ -257,20 +266,33 @@ class _DriverProfileEditorState extends ConsumerState<_DriverProfileEditor> {
     'make' => 'Vehicle make/model',
     'plate' => 'Vehicle plate',
     'seats' => 'Passenger seats (1–4)',
+    'emergencyContactName' => 'Emergency contact name (optional)',
+    'emergencyContactPhone' => 'Emergency contact phone (optional)',
     _ => key[0].toUpperCase() + key.substring(1),
   };
 
   Future<void> _save() async {
     final seats = int.tryParse(_controllers['seats']!.text);
+    final contactName = _controllers['emergencyContactName']!.text.trim();
+    final contactPhone = _controllers['emergencyContactPhone']!.text.trim();
+    final contactIsIncomplete = contactName.isEmpty != contactPhone.isEmpty;
     if (seats == null ||
         seats < 1 ||
         seats > 4 ||
-        _controllers.values.any(
-          (controller) => controller.text.trim().isEmpty,
-        )) {
+        _controllers.entries.any(
+          (entry) =>
+              entry.key != 'emergencyContactName' &&
+              entry.key != 'emergencyContactPhone' &&
+              entry.value.text.trim().isEmpty,
+        ) ||
+        contactIsIncomplete ||
+        (contactPhone.isNotEmpty &&
+            !FormValidators.isValidPakistanPhone(contactPhone))) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Complete every field and enter 1 to 4 seats.'),
+          content: Text(
+            'Complete required fields, enter 1 to 4 seats, and provide both valid emergency contact fields or leave both blank.',
+          ),
         ),
       );
       return;
@@ -290,6 +312,8 @@ class _DriverProfileEditorState extends ConsumerState<_DriverProfileEditor> {
             vehiclePlate: _controllers['plate']!.text,
             vehicleYear: _controllers['year']!.text,
             seatsTotal: seats,
+            emergencyContactName: contactName,
+            emergencyContactPhone: contactPhone,
           );
       if (mounted) Navigator.pop(context, true);
     } catch (error) {

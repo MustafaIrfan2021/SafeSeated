@@ -23,6 +23,7 @@ public class SafeSeatedDbContext : DbContext
 
     // Support
     public DbSet<Complaint> Complaints { get; set; }
+    public DbSet<EmergencyAlert> EmergencyAlerts { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -35,6 +36,7 @@ public class SafeSeatedDbContext : DbContext
         modelBuilder.Entity<RideRequest>().HasQueryFilter(rr => !rr.IsDeleted);
         modelBuilder.Entity<UserDocument>().HasQueryFilter(ud => !ud.IsDeleted);
         modelBuilder.Entity<Complaint>().HasQueryFilter(c => !c.IsDeleted);
+        modelBuilder.Entity<EmergencyAlert>().HasQueryFilter(alert => !alert.IsDeleted);
 
         // User entity configuration
         modelBuilder.Entity<User>(entity =>
@@ -108,6 +110,24 @@ public class SafeSeatedDbContext : DbContext
             entity.Property(dp => dp.VehicleMakeModel).HasColumnName("VehicleModel");
             entity.Property(dp => dp.VehicleColor).HasColumnName("VehicleColour");
             entity.Property(dp => dp.VehicleModelYear).HasColumnName("VehicleYear");
+        });
+
+        modelBuilder.Entity<EmergencyAlert>(entity =>
+        {
+            entity.HasKey(alert => alert.Id);
+            entity.HasIndex(alert => new { alert.UserId, alert.ClientRequestId }).IsUnique();
+            entity.HasIndex(alert => alert.CreatedAt);
+            entity.Property(alert => alert.ReporterRole).HasConversion<string>().HasMaxLength(50);
+            entity.Property(alert => alert.ClientRequestId).HasMaxLength(64);
+            entity.Property(alert => alert.Status).HasMaxLength(20);
+            entity.HasOne(alert => alert.User)
+                .WithMany()
+                .HasForeignKey(alert => alert.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(alert => alert.Ride)
+                .WithMany()
+                .HasForeignKey(alert => alert.RideId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // UserDocument configuration

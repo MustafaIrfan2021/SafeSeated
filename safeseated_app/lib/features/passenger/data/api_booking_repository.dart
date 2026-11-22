@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_id_mapper.dart';
+import '../../../core/utils/pakistan_time.dart';
 import '../domain/models/booking.dart';
 import '../domain/models/chat_message.dart';
 import '../domain/repositories/booking_repository.dart';
@@ -50,11 +51,11 @@ class ApiBookingRepository implements BookingRepository {
     final rideGuid = ApiIdMapper.toGuid(rideId);
     if (rideGuid == null) throw ArgumentError('Ride ID is invalid.');
 
-    final pickup = _parsePickupTime(pickupTime);
+    final pickup = PakistanTime.parseInput(pickupTime);
     final data = await _api.postJson('/bookings', {
       'rideId': rideGuid,
       'seats': seats,
-      if (pickup != null) 'pickupTime': pickup.toUtc().toIso8601String(),
+      if (pickup != null) 'pickupTime': pickup.toIso8601String(),
     });
     return _bookingFromJson(data);
   }
@@ -91,12 +92,18 @@ class ApiBookingRepository implements BookingRepository {
     final status = BookingStatus.fromCode(
       json['status']?.toString() ?? 'pending',
     );
+    final departureTime = PakistanTime.parseUtc(
+      json['departureTime']?.toString(),
+    );
     final travelDate =
         json['travelDate']?.toString() ?? json['departureTime']?.toString();
-    final date = DateTime.tryParse(travelDate ?? '');
+    final date =
+        departureTime == null
+            ? PakistanTime.parseUtc(travelDate)
+            : PakistanTime.toPakistan(departureTime);
     final pickupTime =
-        DateTime.tryParse(json['pickupTime']?.toString() ?? '') ??
-        DateTime.tryParse(json['departureTime']?.toString() ?? '');
+        PakistanTime.parseUtc(json['pickupTime']?.toString()) ??
+        departureTime;
 
     return Booking(
       id: bookingId,
@@ -110,31 +117,11 @@ class ApiBookingRepository implements BookingRepository {
       seats: _intValue(json['seats'] ?? json['seatsRequested'], 1),
       pickupTime: pickupTime == null
           ? '--'
-          : DateFormat('h:mm a').format(pickupTime.toLocal()),
+          : DateFormat('h:mm a').format(PakistanTime.toPakistan(pickupTime)),
       totalFare: _intValue(json['fareTotal'], 0),
       rating: json['rating'] is num ? (json['rating'] as num).toInt() : null,
       reviewText: json['review']?.toString(),
     );
-  }
-
-  DateTime? _parsePickupTime(String value) {
-    final iso = DateTime.tryParse(value);
-    if (iso != null) return iso;
-
-    final match = RegExp(
-      r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$',
-      caseSensitive: false,
-    ).firstMatch(value.trim());
-    if (match == null) return null;
-    var hour = int.parse(match.group(1)!);
-    final minute = int.parse(match.group(2)!);
-    final suffix = match.group(3);
-    if (suffix != null) {
-      if (suffix.toUpperCase() == 'PM' && hour < 12) hour += 12;
-      if (suffix.toUpperCase() == 'AM' && hour == 12) hour = 0;
-    }
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day, hour, minute);
   }
 
   static int _intValue(Object? value, int fallback) => value is num

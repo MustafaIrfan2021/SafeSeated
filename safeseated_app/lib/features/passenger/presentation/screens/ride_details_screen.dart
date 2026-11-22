@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/utils/pakistan_time.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../domain/models/ride.dart';
@@ -62,7 +63,7 @@ class RideDetailsScreen extends ConsumerWidget {
                     const Divider(height: 16),
                     _buildRow(
                       'Departure',
-                      '${DateFormat('EEE, d MMM yyyy').format(ride.departureAt)} · ${ride.departureTime}',
+                      '${DateFormat('EEE, d MMM yyyy').format(PakistanTime.toPakistan(ride.departureAt))} · ${ride.departureTime}',
                     ),
                     const Divider(height: 16),
                     _buildRow('Seats offered', '${ride.seatsTotal} seats'),
