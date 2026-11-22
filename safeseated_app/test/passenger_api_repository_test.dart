@@ -227,6 +227,36 @@ void main() {
     expect(rides.single.seatsAvailable, 2);
   });
 
+  test('ride search returns no rides for an empty paginated response', () async {
+    final client = ApiClient(
+      tokenStorage: _MemoryTokenStorage(),
+      baseUrl: 'http://test/api',
+      httpClient: MockClient((request) async {
+        expect(request.url.queryParameters['pickup'], 'Gulshan-e-Iqbal');
+        expect(request.url.queryParameters['seats'], '1');
+        return http.Response(
+          jsonEncode({
+            'data': <Object>[],
+            'pagination': {
+              'page': 1,
+              'pageSize': 100,
+              'totalCount': 0,
+              'totalPages': 0,
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final rides = await ApiRideRepository(
+      client,
+    ).getAvailableRides(pickupQuery: 'Gulshan-e-Iqbal', seatsNeeded: 1);
+
+    expect(rides, isEmpty);
+  });
+
   test(
     'passenger bookings map backend status and create uses GUID ride id',
     () async {
