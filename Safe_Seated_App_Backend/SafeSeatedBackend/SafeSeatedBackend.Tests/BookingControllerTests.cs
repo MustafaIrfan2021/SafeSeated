@@ -50,7 +50,60 @@ public sealed class BookingControllerTests
         var created = Assert.IsType<CreatedAtActionResult>(result);
         Assert.NotNull(created.Value);
         Assert.Equal(500m, (decimal)created.Value.GetType().GetProperty("fareTotal")!.GetValue(created.Value)!);
-        Assert.Equal(500m, (await database.Context.Bookings.SingleAsync()).FareTotal);
+        var savedBooking = await database.Context.Bookings.SingleAsync();
+        Assert.Equal(500m, savedBooking.FareTotal);
+        Assert.Equal(BookingStatus.Pending, savedBooking.Status);
+    }
+
+    [Fact]
+    public async Task GetDriverBookingsFiltersByDriverAndRequestedStatus()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var (driver, firstPassenger, secondPassenger, ride) = await database.SeedRideAsync(seats: 3);
+        var otherDriver = new User
+        {
+            Role = UserRole.Driver,
+            FullName = "Other Driver",
+            Phone = "03000000004",
+            Email = "other-driver@example.com",
+            PasswordHash = "test-hash",
+            Cnic = "4444444444444",
+            Status = UserStatus.Verified
+        };
+        var otherRide = new Ride
+        {
+            DriverId = otherDriver.Id,
+            Driver = otherDriver,
+            PickupArea = "Campus",
+            Destination = "Airport",
+            DepartureTime = DateTime.UtcNow.AddDays(1),
+            PricePerSeat = 300,
+            SeatsOffered = 2,
+            Status = RideStatus.Active
+        };
+        var ownPending = CreateBooking(ride, firstPassenger, seats: 1);
+        var ownAccepted = CreateBooking(ride, secondPassenger, seats: 1);
+        ownAccepted.Status = BookingStatus.Accepted;
+        var otherPending = CreateBooking(otherRide, firstPassenger, seats: 1);
+
+        database.Context.Users.Add(otherDriver);
+        database.Context.Rides.Add(otherRide);
+        database.Context.Bookings.AddRange(ownPending, ownAccepted, otherPending);
+        await database.Context.SaveChangesAsync();
+
+        var result = await database.CreateController(driver.Id).GetDriverBookings(
+            nameof(BookingStatus.Pending),
+            CancellationToken.None);
+
+        var response = Assert.IsType<OkObjectResult>(result);
+        var bookings = Assert.IsAssignableFrom<IEnumerable<object>>(response.Value).ToArray();
+        var returnedBooking = Assert.Single(bookings);
+        Assert.Equal(
+            ownPending.Id,
+            (Guid)returnedBooking.GetType().GetProperty("Id")!.GetValue(returnedBooking)!);
+        Assert.Equal(
+            nameof(BookingStatus.Pending),
+            (string)returnedBooking.GetType().GetProperty("status")!.GetValue(returnedBooking)!);
     }
 
     [Fact]

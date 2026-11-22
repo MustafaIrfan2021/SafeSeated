@@ -279,6 +279,44 @@ void main() {
     },
   );
 
+  test('driver bookings use the authenticated driver endpoint', () async {
+    const bookingGuid = '22222222-2222-2222-2222-222222222222';
+    const rideGuid = '11111111-1111-1111-1111-111111111111';
+    final client = ApiClient(
+      tokenStorage: _MemoryTokenStorage(),
+      baseUrl: 'http://test/api',
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/drivers/me/bookings');
+        expect(request.headers['Authorization'], 'Bearer test-token');
+        return http.Response(
+          jsonEncode([
+            {
+              'id': bookingGuid,
+              'rideId': rideGuid,
+              'passengerName': 'Passenger',
+              'seats': 1,
+              'fareTotal': 350,
+              'pickupTime': '2026-11-22T08:00:00Z',
+              'departureTime': '2026-11-22T08:00:00Z',
+              'status': 'Pending',
+            },
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final bookings = await ApiBookingRepository(
+      client,
+    ).getDriverBookings('driver@example.com');
+
+    expect(bookings, hasLength(1));
+    expect(bookings.single.status, BookingStatus.pending);
+    expect(bookings.single.id, ApiIdMapper.toInt(bookingGuid));
+  });
+
   test(
     'ride requests and bookings interpret timezone-free times as Pakistan time',
     () async {
@@ -305,6 +343,11 @@ void main() {
             );
           }
           if (request.url.path.endsWith('/bookings')) {
+            expect(request.method, 'POST');
+            expect(request.url.path, '/api/bookings');
+            expect(request.headers['Authorization'], 'Bearer test-token');
+            expect(body['rideId'], rideGuid);
+            expect(body['seats'], 1);
             expect(body['pickupTime'], '2026-11-21T22:15:00.000Z');
             return http.Response(
               jsonEncode({
@@ -332,7 +375,7 @@ void main() {
         time: '2026-11-22 03:15',
         seats: 1,
       );
-      await ApiBookingRepository(client).createBooking(
+      final booking = await ApiBookingRepository(client).createBooking(
         rideId: 903,
         passengerEmail: 'passenger@example.com',
         passengerName: 'Passenger',
@@ -340,6 +383,7 @@ void main() {
         pickupTime: '2026-11-22 03:15',
         totalFare: 350,
       );
+      expect(booking.status, BookingStatus.pending);
     },
   );
 

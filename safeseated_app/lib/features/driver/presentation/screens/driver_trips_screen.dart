@@ -5,7 +5,9 @@ import '../../../../core/providers/app_providers.dart';
 import '../../../passenger/domain/models/booking.dart';
 
 class DriverTripsScreen extends ConsumerStatefulWidget {
-  const DriverTripsScreen({super.key});
+  const DriverTripsScreen({super.key, this.isActive = true});
+
+  final bool isActive;
 
   @override
   ConsumerState<DriverTripsScreen> createState() => _DriverTripsScreenState();
@@ -20,6 +22,17 @@ class _DriverTripsScreenState extends ConsumerState<DriverTripsScreen> {
   ];
 
   BookingStatus _selectedStatus = BookingStatus.pending;
+
+  @override
+  void didUpdateWidget(covariant DriverTripsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      final user = ref.read(authStateProvider).value;
+      if (user != null) {
+        ref.invalidate(driverBookingsProvider(user.email));
+      }
+    }
+  }
 
   Future<void> _changeStatus(
     BuildContext context,

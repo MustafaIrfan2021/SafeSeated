@@ -16,26 +16,28 @@ class DriverShellScreen extends StatefulWidget {
 }
 
 class _DriverShellScreenState extends State<DriverShellScreen> {
+  static const _tabCount = 5;
   late int _currentIndex;
-
-  static const _screens = [
-    DriverDashboardScreen(),
-    DriverTripsScreen(),
-    DriverRidesScreen(),
-    DriverWalletScreen(),
-    DriverProfileScreen(),
-  ];
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialTab.clamp(0, _screens.length - 1).toInt();
+    _currentIndex = widget.initialTab.clamp(0, _tabCount - 1).toInt();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _screens),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          const DriverDashboardScreen(),
+          DriverTripsScreen(isActive: _currentIndex == 1),
+          const DriverRidesScreen(),
+          const DriverWalletScreen(),
+          const DriverProfileScreen(),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFFC62828),
         foregroundColor: Colors.white,
