@@ -66,7 +66,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const notify = () => subs.forEach(f => f());
 const now = () => new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5157/api')
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://mustafairfan-001-site1.gtempurl.com/api')
   .replace(/\/+$/, '');
 const TOKEN_KEY = 'safeseated_admin_token';
 const ADMIN_KEY = 'safeseated_admin_user';
